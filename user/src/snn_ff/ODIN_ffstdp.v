@@ -52,11 +52,6 @@ module ODIN_ffstdp #(
     input  wire                         IS_POS                     ,// 0: negative, 1: positive
     input  wire                         IS_TRAIN                   ,// 0: inference, 1: training
     
-    // SPI slave        -------------------------------
-    input  wire                         SCK                        ,
-    input  wire                         MOSI                       ,
-    output wire                         MISO                       ,
-
 	// Input 12-bit AER -------------------------------
     input  wire        [ AER_WIDTH-1: 0]        AERIN_ADDR                 ,
     input  wire                         AERIN_REQ                  ,
@@ -82,23 +77,7 @@ module ODIN_ffstdp #(
     wire                                RSTN_sync                   ;
 
     // AER output
-    wire                                AEROUT_CTRL_BUSY            ;
     wire                                AEROUT_CTRL_FINISH          ;
-
-    
-    // SPI + parameter bank
-    wire                                SPI_GATE_ACTIVITY,        SPI_GATE_ACTIVITY_sync;
-    wire                                SPI_OPEN_LOOP               ;
-    wire                                SPI_AER_SRC_CTRL_nNEUR      ;
-    wire               [ PRE_NEUR_ADDR_WIDTH-1: 0]        SPI_MAX_NEUR                ;
-    wire               [POST_NEUR_ADDR_WIDTH-1:0]         SPI_POST_NEUR_ADDR          ;
-    
-    // Controller
-    wire                                CTRL_READBACK_EVENT         ;
-    wire                                CTRL_PROG_EVENT             ;
-    wire               [2*PRE_NEUR_ADDR_WIDTH-1: 0]       CTRL_SPI_ADDR               ;
-    wire               [   1: 0]        CTRL_OP_CODE                ;
-    wire               [2*PRE_NEUR_ADDR_WIDTH-1: 0]       CTRL_PROG_DATA              ;
     wire               [SYN_ARRAY_ADDR_WIDTH-1: 0]        CTRL_SYNARRAY_ADDR          ;// 控制信号: 突触数组地址
     wire                                CTRL_SYNARRAY_CS            ;// 控制信号: 突触数组选择
     wire                                CTRL_SYNARRAY_WE            ;// 控制信号: 突触数组写使能    
@@ -177,9 +156,6 @@ module ODIN_ffstdp #(
     // Global input -----------------------------------
         .CLK                                (CLK                       ),
         .RST                                (RST                       ),
-    // Inputs from SPI configuration latches ----------
-        .SPI_GATE_ACTIVITY_sync             (SPI_GATE_ACTIVITY_sync    ),
-        .SPI_AER_SRC_CTRL_nNEUR             (SPI_AER_SRC_CTRL_nNEUR    ),
     // Neuron data inputs -----------------------------
         .NEUR_EVENT_OUT                     (NEUR_EVENT_OUT            ),
     // Input from scheduler ---------------------------
@@ -205,30 +181,6 @@ module ODIN_ffstdp #(
         .ONE_SAMPLE_FINISH                  (ONE_SAMPLE_FINISH         )
     );
 
-    
-    //----------------------------------------------------------------------------------
-	//	SPI + parameter bank
-	//----------------------------------------------------------------------------------
-    spi_slave #(
-    .N                                  (256                       ),
-    .M                                  (8                         ) 
-    ) spi_slave_inst (
-    .RST_async                          (RST                       ),
-    .SCK                                (SCK                       ),
-    .MISO                               (MISO                      ),
-    .MOSI                               (MOSI                      ),
-    .CTRL_READBACK_EVENT                (CTRL_READBACK_EVENT       ),
-    .CTRL_PROG_EVENT                    (CTRL_PROG_EVENT           ),
-    .CTRL_SPI_ADDR                      (CTRL_SPI_ADDR             ),
-    .CTRL_OP_CODE                       (CTRL_OP_CODE              ),
-    .CTRL_PROG_DATA                     (CTRL_PROG_DATA            ),
-    .SYNARRAY_RDATA                     (SYNARRAY_RDATA            ),
-    .NEUR_STATE                         (NEUR_STATE                ),
-    .SPI_GATE_ACTIVITY                  (SPI_GATE_ACTIVITY         ),
-    .SPI_OPEN_LOOP                      (SPI_OPEN_LOOP             ),
-    .SPI_AER_SRC_CTRL_nNEUR             (SPI_AER_SRC_CTRL_nNEUR    ),
-    .SPI_MAX_NEUR                       (SPI_MAX_NEUR              ) 
-    );
     
     //----------------------------------------------------------------------------------
 	//	Controller
@@ -265,24 +217,12 @@ module ODIN_ffstdp #(
     .AERIN_REQ                          (AERIN_REQ                 ),// AER 输入请求信号
     .AERIN_ACK                          (AERIN_ACK                 ),// AER 输入应答信号
 
-        // Control Interface for Readback -------------------------
-    .CTRL_READBACK_EVENT                (CTRL_READBACK_EVENT       ),// 读取回传事件
-    .CTRL_PROG_EVENT                    (CTRL_PROG_EVENT           ),// 编程事件
-    .CTRL_SPI_ADDR                      (CTRL_SPI_ADDR             ),// SPI 地址
-    .CTRL_OP_CODE                       (CTRL_OP_CODE              ),// 操作码
-
-        // Inputs from SPI Configuration Registers ----------------
-    .SPI_GATE_ACTIVITY                  (SPI_GATE_ACTIVITY         ),// SPI 激活控制信号
-    .SPI_GATE_ACTIVITY_sync             (SPI_GATE_ACTIVITY_sync    ),// SPI 激活同步信号
-    .SPI_MAX_NEUR                       (SPI_MAX_NEUR              ),// 最大神经元数目
-
         // Inputs from Scheduler ----------------------------------
     .SCHED_EMPTY                        (SCHED_EMPTY               ),// 调度器是否为空
     .SCHED_FULL                         (SCHED_FULL                ),// 调度器是否满
     .SCHED_DATA_OUT                     (SCHED_DATA_OUT            ),// 调度器输出数据
 
         // Inputs from AER Output ---------------------------------
-    .AEROUT_CTRL_BUSY                   (AEROUT_CTRL_BUSY          ),// AER 输出控制是否忙
     .AEROUT_CTRL_FINISH                 (AEROUT_CTRL_FINISH        ),// AER 输出控制是否完成
 
         // Outputs to Synaptic Core -------------------------------
@@ -355,7 +295,6 @@ module ODIN_ffstdp #(
     .CTRL_SCHED_VIRTS                   (CTRL_SCHED_VIRTS          ),
     .CTRL_SCHED_ADDR                    (CTRL_SCHED_ADDR           ),
     .CTRL_SCHED_EVENT_IN                (CTRL_SCHED_EVENT_IN       ),
-    .SPI_OPEN_LOOP                      (SPI_OPEN_LOOP             ),
     .SCHED_EMPTY                        (SCHED_EMPTY               ),
     .SCHED_FULL                         (SCHED_FULL                ),
     .SCHED_DATA_OUT                     (SCHED_DATA_OUT            ) 
@@ -389,8 +328,6 @@ module ODIN_ffstdp #(
         .IS_TRAIN                           (IS_TRAIN                  ),
     // Global inputs ------------------------------------------
         .CLK                                (CLK                       ),
-    // Inputs from SPI configuration registers ----------------
-        .SPI_GATE_ACTIVITY_sync             (SPI_GATE_ACTIVITY_sync    ),
     // Inputs from controller ---------------------------------
         .CTRL_SYNARRAY_CS                   (CTRL_SYNARRAY_CS          ),
         .CTRL_SYNARRAY_WE                   (CTRL_SYNARRAY_WE          ),
@@ -454,10 +391,6 @@ module ODIN_ffstdp #(
     .CTRL_POST_NEUR_CS                  (CTRL_POST_NEUR_CS         ),// 后神经元选择信号
     .CTRL_POST_NEUR_WE                  (CTRL_POST_NEUR_WE         ),// 后神经元写使能信号
     .CTRL_PRE_CNT_EN                    (CTRL_PRE_CNT_EN           ),// 预计数器使能信号
-
-        // SPI inputs ----------------------------------------
-    .SPI_GATE_ACTIVITY_sync             (SPI_GATE_ACTIVITY_sync    ),// SPI激活同步信号
-    .SPI_POST_NEUR_ADDR                 (SPI_POST_NEUR_ADDR        ),// SPI后神经元地址
 
         // Outputs ----------------------------------------
     .NEUR_STATE                         (NEUR_STATE                ),// 神经元状态

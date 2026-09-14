@@ -398,11 +398,6 @@ integer completed_sample_count = 0;
         m_axi_rlast = 0;
         m_axi_ruser = 0;
         m_axi_rvalid = 0;
-        // The restored reference RTL contains the original internal SPI
-        // block; keep its pins idle for this AXI/AER regression.
-        u_Top_test.SCK = 1'b0;
-        u_Top_test.MOSI = 1'b0;
-
         // 复位
         #10 m_axi_aresetn = 1;
         // 生成写事�?

@@ -61,10 +61,6 @@ module Top_test
     parameter SYN_ARRAY_DATA_WIDTH = POST_NEUR_PARALLEL * WEIGHT_WIDTH; // 突触阵列数据位宽
     parameter SYN_ARRAY_ADDR_WIDTH = $clog2(INPUT_NEURON * OUTPUT_NEURON / POST_NEUR_PARALLEL); // 突触阵列地址位宽 
 
-    reg                                 SCK                         ;
-    reg                                 MOSI                        ;
-    wire                                MISO                        ;
-
     wire               [AER_WIDTH-1: 0]        AEROUT_ADDR                 ;
     wire                                AEROUT_REQ                  ;
     wire                                AEROUT_ACK                  ;
@@ -102,10 +98,6 @@ ODIN_ffstdp#(
     .RST                                (RST                       ),
     .IS_POS                             (IS_POS                    ),// 0: negative, 1: positive
     .IS_TRAIN                           (IS_TRAIN                  ),// 0: inference, 1: training
-// SPI slave        -------------------------------
-    .SCK                                (SCK                       ),
-    .MOSI                               (MOSI                      ),
-    .MISO                               (MISO                      ),
 // Input 12-bit AER -------------------------------
     .AERIN_ADDR                         (AERIN_ADDR                ),
     .AERIN_REQ                          (AERIN_REQ                 ),

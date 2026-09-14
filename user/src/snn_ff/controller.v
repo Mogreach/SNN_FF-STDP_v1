@@ -59,24 +59,12 @@ module controller #(
     input  wire           AERIN_REQ,
     output reg            AERIN_ACK,
     
-    // Control interface for readback -------------------------
-    input  wire           CTRL_READBACK_EVENT,
-    input  wire           CTRL_PROG_EVENT,
-    input  wire [2*PRE_NEUR_ADDR_WIDTH-1:0] CTRL_SPI_ADDR,
-    input  wire     [1:0] CTRL_OP_CODE,
-    
-    // Inputs from SPI configuration registers ----------------
-    input  wire           SPI_GATE_ACTIVITY, 
-    output reg            SPI_GATE_ACTIVITY_sync,
-    input  wire   [PRE_NEUR_ADDR_WIDTH-1:0] SPI_MAX_NEUR,
-    
     // Inputs from scheduler ----------------------------------
     input  wire           SCHED_EMPTY,
     input  wire           SCHED_FULL,
     input  wire    [AER_WIDTH-1:0] SCHED_DATA_OUT,
     
     // Input from AER output ----------------------------------
-    input  wire           AEROUT_CTRL_BUSY,
     input wire           AEROUT_CTRL_FINISH,
     
     // Outputs to synaptic core -------------------------------
@@ -88,12 +76,10 @@ module controller #(
     output reg CTRL_SYNA_RD_EVENT,
     output reg[WEIGHT_WIDTH-1:0] CTRL_SYNA_PROG_DATA,
     
-    // Outputs to neurons -------------------------------------
-    //SPI控制读写事件
+    // Reserved programming outputs are held inactive by the AER-only FSM.
     output reg            CTRL_WR_NEUR_EVENT,
     output reg            CTRL_RD_NEUR_EVENT,
-    // SPI控制编入数据
-    output reg [SYN_ARRAY_DATA_WIDTH-1:0]     CTRL_POST_NEUR_PROG_DATA,
+    output reg [POST_NEUR_DATA_WIDTH-1:0]    CTRL_POST_NEUR_PROG_DATA,
     //控制器神经元地址
     output reg  [PRE_NEUR_ADDR_WIDTH-1:0]      CTRL_PRE_NEURON_ADDRESS,
     output reg  [POST_NEUR_ADDR_WIDTH-1:0]      CTRL_POST_NEURON_ADDRESS,//突触后神经元地址
@@ -145,6 +131,7 @@ module controller #(
     localparam AER_TOTAL_CLK_tref = R_W_SRAM_CLK_tref * (OUTPUT_NEURON / POST_NEUR_PARALLEL) - 1;
 	// FSM states 
 	localparam WAIT       = 4'd0; 
+    // Kept reserved so a corrupted state returns to the default safe output.
     localparam W_NEUR     = 4'd1;
     localparam R_NEUR     = 4'd2;
     localparam W_SYN      = 4'd3;
@@ -164,9 +151,6 @@ module controller #(
 	//----------------------------------------------------------------------------------
     
     reg          AERIN_REQ_sync_int, AERIN_REQ_sync;
-    reg          SPI_GATE_ACTIVITY_sync_int;
-    reg          CTRL_READBACK_EVENT_sync_int, CTRL_READBACK_EVENT_sync;
-    reg          CTRL_PROG_EVENT_sync_int, CTRL_PROG_EVENT_sync;
 
     wire         neuron_event,tstep_event, tref_event;
     wire         CTRL_TSTEP_EVENT_posedge;
@@ -198,30 +182,18 @@ module controller #(
 	assign CTRL_AEROUT_TREF_FINISH = tref_finish;
     assign ctrl_state = state;
     //----------------------------------------------------------------------------------
-	//	SYNC BARRIERS FROM AER AND FROM SPI
+	//	SYNC BARRIER FROM AER
 	//----------------------------------------------------------------------------------
     
    always @(posedge CLK, posedge RST) begin
 		if(RST) begin
 			AERIN_REQ_sync_int           <= 1'b0;
 			AERIN_REQ_sync	             <= 1'b0;
-            SPI_GATE_ACTIVITY_sync_int   <= 1'b0;
-            SPI_GATE_ACTIVITY_sync       <= 1'b0;
-            CTRL_READBACK_EVENT_sync_int <= 1'b0;
-            CTRL_READBACK_EVENT_sync     <= 1'b0;
-            CTRL_PROG_EVENT_sync_int     <= 1'b0;
-            CTRL_PROG_EVENT_sync         <= 1'b0;
             CTRL_TSTEP_EVENT_int         <= 1'b0;
 		end
 		else begin
 			AERIN_REQ_sync_int           <= AERIN_REQ;
 			AERIN_REQ_sync	             <= AERIN_REQ_sync_int;
-            SPI_GATE_ACTIVITY_sync_int   <= SPI_GATE_ACTIVITY;
-            SPI_GATE_ACTIVITY_sync       <= SPI_GATE_ACTIVITY_sync_int;
-            CTRL_READBACK_EVENT_sync_int <= CTRL_READBACK_EVENT;
-            CTRL_READBACK_EVENT_sync     <= CTRL_READBACK_EVENT_sync_int;
-            CTRL_PROG_EVENT_sync_int     <= CTRL_PROG_EVENT;
-            CTRL_PROG_EVENT_sync         <= CTRL_PROG_EVENT_sync_int;
             CTRL_TSTEP_EVENT_int         <= CTRL_TSTEP_EVENT;
 		end
 	end
@@ -242,14 +214,6 @@ module controller #(
 	always @(*)
 		case(state)
 			WAIT 		:	
-                                // if (SPI_GATE_ACTIVITY_sync)
-            //                 // AER输入事件类型
-            //                     if      (CTRL_PROG_EVENT_sync     && (CTRL_OP_CODE == 2'b01))                   nextstate = W_NEUR;
-            //                     else if (CTRL_READBACK_EVENT_sync && (CTRL_OP_CODE == 2'b01))                   nextstate = R_NEUR;
-            //                     else if (CTRL_PROG_EVENT_sync     && (CTRL_OP_CODE == 2'b10))                   nextstate = W_SYN;
-            //                     else if (CTRL_READBACK_EVENT_sync && (CTRL_OP_CODE == 2'b10))                   nextstate = R_SYN;
-            //                     else                                                                            nextstate = WAIT;
-                            // else
                             if (SCHED_FULL)                                                                 
                                 //SCHED_DATA_OUT[11:10] == 2'b01
                                 if( |SCHED_DATA_OUT[AER_WIDTH-1:AER_WIDTH-2])                               nextstate = TSTEP_ACT;
@@ -261,17 +225,10 @@ module controller #(
                                 if( |SCHED_DATA_OUT[AER_WIDTH-1:AER_WIDTH-2])                               nextstate = TSTEP_ACT;
                                 else                                                                        nextstate = NEUR_ACT;
                             else                                                                            nextstate = WAIT;
-			W_NEUR    	:   if      (ctrl_cnt == 32'd1 )                                                    nextstate = WAIT_SPIDN;
-							else					                                                            nextstate = W_NEUR;
-			R_NEUR    	:                                                                                       nextstate = WAIT_SPIDN;
-			W_SYN    	:   if      (ctrl_cnt == 32'd1 )                                                        nextstate = WAIT_SPIDN;
-							else					                                                            nextstate = W_SYN;
-			R_SYN    	:                                                                                       nextstate = WAIT_SPIDN;
 			TREF    	:   if      (tref_finish)                                                               nextstate = WAIT;
 							else					                                                            nextstate = TREF;
             PUSH        :                                                                                       nextstate = WAIT_REQDN;
 			//确保CTRL_SCHED_POP_N拉低一周期
-                                                 //{SPI_MAX_NEUR,1'b1}
             NEUR_ACT    :   if      ((post_neur_cnt == OUTPUT_NEURON - POST_NEUR_PARALLEL) && (ctrl_neur_act_cnt == R_W_SRAM_CLK_neur_act - 1'b1))  nextstate = POP_NEUR;
 							else					                                                            nextstate = NEUR_ACT;
             POP_NEUR    :   if      (~CTRL_SCHED_POP_N)                                                         nextstate = WAIT;
@@ -284,8 +241,6 @@ module controller #(
                                 if  ((T_step_cnt == TIME_STEP))                                                 nextstate = TREF;
                                 else                                                                            nextstate = WAIT;
                             else                                                                                nextstate =POP_TSTEP;   
-			WAIT_SPIDN 	:   if      (~CTRL_PROG_EVENT_sync && ~CTRL_READBACK_EVENT_sync)                        nextstate = WAIT;
-							else					                                                            nextstate = WAIT_SPIDN;
 			WAIT_REQDN 	:   if      (~AERIN_REQ_sync)                                                           nextstate = WAIT;
 							else					                                                            nextstate = WAIT_REQDN;
 			default		:							                                                            nextstate = WAIT;

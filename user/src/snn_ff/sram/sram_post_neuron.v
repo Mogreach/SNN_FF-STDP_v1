@@ -27,10 +27,6 @@ module sram_post_neuron #(
         reg [DATA_WIDTH-1:0] SRAM[0:SRAM_DEPTH-1];
         reg [DATA_WIDTH-1:0] Qr;
 
-        initial begin
-        $readmemh("/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/post_neuron_state.txt", SRAM);
-        end
-
         always @(posedge CK) begin
             Qr <= CS ? SRAM[A] : Qr;
             if (CS & WE) SRAM[A] <= D;

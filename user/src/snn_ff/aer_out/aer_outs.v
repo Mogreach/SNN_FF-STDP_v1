@@ -52,9 +52,6 @@ module aer_outs #(
     // Global input ----------------------------------- 
     input  wire           CLK,
     input  wire           RST,
-    // Inputs from SPI configuration latches ----------
-    input  wire           SPI_GATE_ACTIVITY_sync,
-    input  wire           SPI_AER_SRC_CTRL_nNEUR,
     // Neuron data inputs -----------------------------
     input  wire [POST_NEUR_PARALLEL-1:0]     NEUR_EVENT_OUT,
     // Input from scheduler ---------------------------

@@ -33,36 +33,17 @@
     input  wire [PRE_NEUR_ADDR_WIDTH-1:0] CTRL_SCHED_ADDR,
     input  wire                 CTRL_SCHED_EVENT_IN,
     
-    // Inputs from SPI configuration registers ----------------
-    input  wire                 SPI_OPEN_LOOP,
-    
     // Outputs ------------------------------------------------
     output wire                 SCHED_EMPTY,
     output wire                 SCHED_FULL,
     output wire [AER_WIDTH-1:0] SCHED_DATA_OUT
 );
 
-    reg                    SPI_OPEN_LOOP_sync_int, SPI_OPEN_LOOP_sync;
-
     wire                   push_req_n;
 
     wire                   empty_main;
     wire                   full_main;
     wire [AER_WIDTH-1:0] data_out_main;
-
-
-    // Sync barrier from SPI
-
-    always @(posedge CLK, negedge RSTN) begin
-        if(~RSTN) begin
-            SPI_OPEN_LOOP_sync_int  <= 1'b0;
-            SPI_OPEN_LOOP_sync	    <= 1'b0;
-        end
-        else begin
-            SPI_OPEN_LOOP_sync_int  <= SPI_OPEN_LOOP;
-            SPI_OPEN_LOOP_sync	    <= SPI_OPEN_LOOP_sync_int;
-        end
-    end
 
 
     // FIFO instances
@@ -82,7 +63,6 @@
         .data_out(data_out_main)
     );
 
-    // assign push_req_n = ~((~SPI_OPEN_LOOP_sync) | CTRL_SCHED_EVENT_IN);
     assign push_req_n = ~(CTRL_SCHED_EVENT_IN);
 
 

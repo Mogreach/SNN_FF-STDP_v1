@@ -63,21 +63,6 @@ module sram_bank #(
 
     reg [DATA_WIDTH-1:0] mem [0:BLOCK_DEPTH-1];
 
-    integer i;
-    integer global_index;
-    reg [DATA_WIDTH-1:0] temp_mem [0:TOTAL_DEPTH-1];
-
-    // 自动从总文件中加载属于自己的范围
-    initial begin
-        $readmemb("D:/OneDrive/SNN_FFSTDP/Gen_out/weights_weight.txt", temp_mem);
-
-        for (i = 0; i < BLOCK_DEPTH; i = i + 1) begin
-            global_index = BANK_ID * BLOCK_DEPTH + i;
-            mem[i] = temp_mem[global_index];
-
-        end
-    end
-
     always @(posedge CK) begin
         if (CS) begin
             Q <= mem[A];

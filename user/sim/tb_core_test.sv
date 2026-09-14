@@ -164,11 +164,6 @@ module tb_core_test;
         accepted_tsteps_this_sample = 0;
         output_spikes_this_sample = 0;
         AEROUT_REQ_d = 1'b0;
-        // Top_test keeps the original SPI block internally. It is unused in
-        // this direct-AER regression, so hold its pins at known idle values.
-        dut.SCK = 1'b0;
-        dut.MOSI = 1'b0;
-
         repeat (5) @(posedge CLK);
         @(negedge CLK);
         RST = 1'b0;

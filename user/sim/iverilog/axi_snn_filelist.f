@@ -20,7 +20,6 @@
 ../../../user/src/snn_ff/synaptic_core/synaptic_core.v
 ../../../user/src/snn_ff/controller.v
 ../../../user/src/snn_ff/scheduler.v
-../../../user/src/snn_ff/spi_slave.v
 ../../../user/src/snn_ff/ODIN_ffstdp.v
 ../../../user/src/snn_ff/Top_test.v
 axi_input_fifo_model.sv

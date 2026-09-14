@@ -26,9 +26,6 @@ module synaptic_core #(
     // Global inputs ------------------------------------------
     input  wire CLK,
 
-    // Inputs from SPI configuration registers ----------------
-    input  wire SPI_GATE_ACTIVITY_sync,
-
     // Inputs from controller ---------------------------------
     input wire CTRL_SYNARRAY_CS,
     input wire CTRL_SYNARRAY_WE,
@@ -72,12 +69,10 @@ module synaptic_core #(
         assign POST_NEUR_S_CNT_array[i] = POST_NEUR_S_CNT[i*POST_NEUR_SPIKE_CNT_WIDTH +: POST_NEUR_SPIKE_CNT_WIDTH];
         assign weight_orignal_array[i] = weight_orignal;
         assign weight_new_array[i] = weight_new;
-        // assign synarray_wdata[(i*8)+7:(i*8)] = SPI_GATE_ACTIVITY_sync? (i==post_neuron_byte_addr && CTRL_SYNA_WR_EVENT)? CTRL_SYNA_PROG_DATA : synarray_rdata[(i*8)+7:(i*8)]
-        //                                      : synarray_wdata_int[(i*8)+7:(i*8)];
         assign synarray_wdata[i*WEIGHT_WIDTH +: WEIGHT_WIDTH] = weight_new_array[i];
         ffstdp_update# 
         (
-            .PRE_CNT_WIDTH       (POST_NEUR_SPIKE_CNT_WIDTH  ),
+            .PRE_CNT_WIDTH       (PRE_NEUR_DATA_WIDTH         ),
             .POST_CNT_WIDTH      (POST_NEUR_SPIKE_CNT_WIDTH  ),
             .WEIGHT_WIDTH        (WEIGHT_WIDTH               )
         )

@@ -27,12 +27,10 @@ module neuron_core #(
     // Synaptic inputs ----------------------------------------
     input  wire [SYN_ARRAY_DATA_WIDTH-1:0] SYNARRAY_RDATA,
     // Controller inputs ----------------------------------------
-        // SPI控制编入数据
     input wire  [POST_NEUR_DATA_WIDTH-1:0] CTRL_POST_NEUR_PROG_DATA,
         //控制器突触地址
     input wire [PRE_NEUR_ADDR_WIDTH-1:0] CTRL_PRE_NEURON_ADDRESS,
     input wire [POST_NEUR_ADDR_WIDTH-1:0] CTRL_POST_NEURON_ADDRESS,
-        //SPI控制读写事件
     input wire       CTRL_WR_NEUR_EVENT,
     input wire       CTRL_RD_NEUR_EVENT,
         //训练推理事件
@@ -45,9 +43,6 @@ module neuron_core #(
     input wire  CTRL_POST_NEUR_CS,
     input wire  CTRL_POST_NEUR_WE,
     input wire  CTRL_PRE_CNT_EN,
-    // SPI inputs
-    input wire  SPI_GATE_ACTIVITY_sync,
-    input wire  [POST_NEUR_ADDR_WIDTH-1:0] SPI_POST_NEUR_ADDR,
 
     // Outputs
     output reg [POST_NEUR_DATA_WIDTH-1:0] NEUR_STATE,
@@ -108,23 +103,17 @@ module neuron_core #(
 );
 
     genvar i;
-    // 神经元状态更新模块 + SPI初始化
+    // 神经元状态更新模块
     generate
         for (i=0; i < POST_NEUR_PARALLEL; i=i+1) begin : gen_post_neuron
-            // 神经元状态信息更新：SPI 配置？（SPI指定地址？掩码后的编入数据：保持）：膜电位更新
             // 突触后神经元膜电位更新
-            // assign post_neuron_sram_in[11+(i*32): 0+(i*32)] = SPI_GATE_ACTIVITY_sync ? CTRL_POST_NEUR_PROG_DATA[11:0]: IF_neuron_next_mem[i]; 
             wire [POST_NEUR_MEM_WIDTH-1:0]  post_neuron_mem_next;
             // 突触后神经元阈值更新
-            // assign post_neuron_sram_in[23+(i*32):12+(i*32)] = SPI_GATE_ACTIVITY_sync ? CTRL_POST_NEUR_PROG_DATA[23:12] : neuron_thresold;
             // wire [POST_NEUR_MEM_WIDTH-1:0]  post_neuron_thresold_next = post_neuron_sram_out_array[i][POST_NEUR_MEM_WIDTH +: POST_NEUR_MEM_WIDTH];
             wire [POST_NEUR_MEM_WIDTH-1:0]  post_neuron_thresold_next = neuron_thresold;
             // 突触后神经元发放脉冲更新
-            // assign post_neuron_sram_in[30+(i*32):24+(i*32)] = SPI_GATE_ACTIVITY_sync ? CTRL_POST_NEUR_PROG_DATA[30:24] : IF_neuron_next_spike_cnt[i];
             wire [POST_NEUR_SPIKE_CNT_WIDTH-1:0]  post_neuron_spike_cnt_next;
             // 突触后神经元使能信号更新                 
-            // assign post_neuron_sram_in[31+(i*32)] = SPI_GATE_ACTIVITY_sync ? CTRL_POST_NEUR_PROG_DATA[31] : post_neuron_sram_out[31+(i*32)];                            
-            // assign post_neuron_sram_in[31+(i*32)] = SPI_GATE_ACTIVITY_sync ? CTRL_POST_NEUR_PROG_DATA[31] : 1'b1;
             wire post_neuron_enable_next = 1'b1;
             // assign post_neuron_sram_in_array[i] = {post_neuron_enable_next, post_neuron_spike_cnt_next, post_neuron_thresold_next, post_neuron_mem_next};
             assign post_neuron_sram_in_array[i] = {post_neuron_enable_next, post_neuron_spike_cnt_next, post_neuron_mem_next};
@@ -236,6 +225,4 @@ module neuron_core #(
 //);
 
 endmodule
-
-
 
