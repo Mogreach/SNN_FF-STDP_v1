@@ -1,3 +1,4 @@
+
 module if_neuron #(
     parameter AER_WIDTH = 12,
     parameter POST_NEUR_MEM_WIDTH = 12,
@@ -20,10 +21,8 @@ module if_neuron #(
     
     output reg                 spike_out                // neuron spike event output  
 );
-    localparam signed [POST_NEUR_MEM_WIDTH-1:0] MAX_VALUE =
-        {1'b0, {(POST_NEUR_MEM_WIDTH-1){1'b1}}};
-    localparam signed [POST_NEUR_MEM_WIDTH-1:0] MIN_VALUE =
-        {1'b1, {(POST_NEUR_MEM_WIDTH-1){1'b0}}};
+    localparam max_value = (1 << (POST_NEUR_MEM_WIDTH-1)) - 1;
+    localparam min_value = -(1 << (POST_NEUR_MEM_WIDTH-1));
 
     reg signed [POST_NEUR_MEM_WIDTH-1:0] state_core_reg;
     reg signed [WEIGHT_WIDTH-1:0] syn_weight_reg;
@@ -69,9 +68,8 @@ module if_neuron #(
     always @(*) begin 
         if (time_step_event) begin
             state_core_next_i = state_core;
+            post_spike_cnt_next_i = (spike_out)? post_spike_cnt + 1: post_spike_cnt;
             spike_out       = (state_core >= param_thr)? 1'b1: 1'b0;
-            post_spike_cnt_next_i = (state_core >= param_thr) ?
-                                    post_spike_cnt + 1'b1 : post_spike_cnt;
         end
         else if (time_ref_event)begin 
             state_core_next_i = 'd0;
@@ -80,7 +78,7 @@ module if_neuron #(
         end
         else if (neuron_event) begin
             state_core_next_i = (overflow) ? 
-            (state_syn[POST_NEUR_MEM_WIDTH-1])? MAX_VALUE : MIN_VALUE
+            (state_syn[POST_NEUR_MEM_WIDTH-1])? max_value : min_value
                                                              : state_syn; //防止在一个时间步前，膜电位数值溢出变为负数，导致单个时间步内脉冲发放不了
             post_spike_cnt_next_i = post_spike_cnt;
             spike_out = 1'b0;

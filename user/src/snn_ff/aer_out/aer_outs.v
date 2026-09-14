@@ -29,7 +29,7 @@ module aer_outs #(
     parameter TIME_STEP = 8,
     parameter INPUT_NEURON = 784,
     parameter OUTPUT_NEURON = 256,
-    parameter AER_OUT_CORE_WIDTH = 12,
+    parameter AER_WIDTH = 12,
 
     parameter PRE_NEUR_ADDR_WIDTH = 10,
     parameter PRE_NEUR_WORD_ADDR_WIDTH= 10,
@@ -52,8 +52,13 @@ module aer_outs #(
     // Global input ----------------------------------- 
     input  wire           CLK,
     input  wire           RST,
+    // Inputs from SPI configuration latches ----------
+    input  wire           SPI_GATE_ACTIVITY_sync,
+    input  wire           SPI_AER_SRC_CTRL_nNEUR,
     // Neuron data inputs -----------------------------
     input  wire [POST_NEUR_PARALLEL-1:0]     NEUR_EVENT_OUT,
+    // Input from scheduler ---------------------------
+    input  wire [AER_WIDTH-1:0] SCHED_DATA_OUT,
     // Input from controller --------------------------
     input  wire           CTRL_TREF_EVENT,
     input  wire           CTRL_POST_NEUR_CS, 
@@ -70,7 +75,7 @@ module aer_outs #(
     output wire           AEROUT_CTRL_FINISH,
     
 	// Output 8-bit AER link --------------------------
-	output reg  [  AER_OUT_CORE_WIDTH-1:0] AEROUT_ADDR, 
+	output reg  [  AER_WIDTH-1:0] AEROUT_ADDR, 
 	output reg  	      AEROUT_REQ,
 	input  wire 	      AEROUT_ACK,
 
@@ -102,8 +107,8 @@ module aer_outs #(
     
     
     
-    wire               [POST_NEUR_PARALLEL*AER_OUT_CORE_WIDTH-1: 0]                  aer_out_fifo_din                 ;
-    wire               [AER_OUT_CORE_WIDTH-1: 0]                                     aer_out_fifo_dout                ;
+    wire               [POST_NEUR_PARALLEL*AER_WIDTH-1: 0]                  aer_out_fifo_din                 ;
+    wire               [AER_WIDTH-1: 0]                                     aer_out_fifo_dout                ;
     wire               [    T_LOG2: 0]                                      post_neur_cnt[0:POST_NEUR_PARALLEL-1];
     reg                [2*(T_LOG2+1)-1: 0]                                  post_neur_goodness[0:POST_NEUR_PARALLEL-1];
     wire               [(2*(T_LOG2+1)*POST_NEUR_PARALLEL)-1: 0]             post_neur_goodness_bus;
@@ -119,7 +124,7 @@ module aer_outs #(
     assign                              AEROUT_ACK_sync_negedge     = !AEROUT_ACK_sync & AEROUT_ACK_sync_del;
     assign                              aer_out_addr_last_negedge   = !aer_out_addr_last & aer_out_addr_last_int;
 
-    assign                              aer_out_start               = fifo_rd_en_int  && (!(&aer_out_fifo_dout[AER_OUT_CORE_WIDTH-1:AER_OUT_CORE_WIDTH-2]));// 无效事件11则不传输;   
+    assign                              aer_out_start               = fifo_rd_en_int && (!(&aer_out_fifo_dout[11:10]));// 无效事件11则不传输
     assign                              AEROUT_CTRL_FINISH          = aer_out_addr_last_negedge;
 
     assign                              ctrl_tref_finish_delay_posedge= !ctrl_tref_finish_delay[5] && ctrl_tref_finish_delay[4];
@@ -132,12 +137,10 @@ module aer_outs #(
         for (i = 0; i<POST_NEUR_PARALLEL; i=i+1) begin : gen_aer_output_lane
             localparam [POST_NEUR_ADDR_WIDTH-1:0] LANE_OFFSET = i;
             wire [POST_NEUR_ADDR_WIDTH-1:0] lane_neuron_addr;
-
             assign lane_neuron_addr = CTRL_POST_NEURON_ADDRESS + LANE_OFFSET;
             assign post_neur_cnt[i] = POST_NEUR_S_CNT[i*POST_NEUR_SPIKE_CNT_WIDTH +: T_LOG2+1];
-            assign aer_out_fifo_din[AER_OUT_CORE_WIDTH*(POST_NEUR_PARALLEL-i)-1 -: AER_OUT_CORE_WIDTH] =
-                NEUR_EVENT_OUT[i] ? {2'b00, lane_neuron_addr} :
-                                    {2'b11, {AER_OUT_CORE_WIDTH-2{1'b0}}};
+            assign aer_out_fifo_din[AER_WIDTH*(POST_NEUR_PARALLEL-i)-1 -: AER_WIDTH] =
+                NEUR_EVENT_OUT[i] ? {2'b00, lane_neuron_addr} : {2'b11, 10'd0};
             // goodness_mult goodness_square (
             // .CLK                                (CLK                       ),// input wire CLK
             // .A                                  (post_neur_cnt[i]          ),// input wire [4 : 0] A
@@ -217,14 +220,14 @@ module aer_outs #(
     // Output AER interface
     always @(posedge CLK, posedge rst_activity) begin
         if (rst_activity) begin
-            AEROUT_ADDR             <= 'd0;
+            AEROUT_ADDR             <= 10'b0;
             AEROUT_REQ              <= 1'b0;
             aer_out_trans           <= 1'b0;
             aer_out_addr_last       <= 1'b0;
         end else begin
             // 只有当处于POP_TSTEP，且fifo已排空，且aerout不在传输中，且还没发送tstep_event，才开始发送tstep_event
             if (CTRL_AEROUT_POP_TSTEP && fifo_empty && !aer_out_trans && !AEROUT_CTRL_FINISH)begin
-                AEROUT_ADDR      <= {2'b01,{AER_OUT_CORE_WIDTH-2{1'b0}}};
+                AEROUT_ADDR      <= {2'b01,10'd0};
                 AEROUT_REQ       <= 1'b1;
                 aer_out_trans    <= 1'b1;
                 aer_out_addr_last <= 1'b1;
@@ -255,9 +258,10 @@ module aer_outs #(
     // .full(fifo_full),    // output wire full
     // .empty(fifo_empty)  // output wire empty
     // );
+    
     syncFIFO_diffWidth #(
-    .DIN_WIDTH                             (AER_OUT_CORE_WIDTH * POST_NEUR_PARALLEL),
-    .DOUT_WIDTH                            (AER_OUT_CORE_WIDTH          ),
+    .DIN_WIDTH                             (AER_WIDTH * POST_NEUR_PARALLEL),
+    .DOUT_WIDTH                            (AER_WIDTH          ),
     .WADDR_WIDTH                           ($clog2(2*(POST_NEUR_PARALLEL-1))) 
     ) syncFIFO_diffWidth_u0 (
     .din                                   (aer_out_fifo_din   ),

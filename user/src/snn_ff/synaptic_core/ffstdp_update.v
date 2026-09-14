@@ -1,8 +1,6 @@
 module ffstdp_update #(
     parameter PRE_CNT_WIDTH = 8, //计数0-31
     parameter POST_CNT_WIDTH = 7,
-    parameter GRAD_WIDTH = 8,
-    parameter GOODNESS_WIDTH = 20,
     parameter WEIGHT_WIDTH = 8
 )(
     // Inputs

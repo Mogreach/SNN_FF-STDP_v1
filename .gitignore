@@ -107,6 +107,10 @@ _ide/
 # Icarus build directory: keep only its explanatory README.
 /user/sim/iverilog/build/*
 !/user/sim/iverilog/build/README.md
+/user/sim/iverilog/build_axi_test/*
+!/user/sim/iverilog/build_axi_test/README.md
+/user/sim/iverilog/build_core_test/*
+!/user/sim/iverilog/build_core_test/README.md
 
 # Editor and OS metadata
 .vscode/

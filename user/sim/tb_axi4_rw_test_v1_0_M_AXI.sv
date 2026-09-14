@@ -6,14 +6,19 @@ module tb_axi4_rw_test_v1_0;
     parameter TIME_TOTAL_STEP = 8;
     parameter DATA_SIZE = 784;
     parameter OUTPUT_NEURON = 256;
-    // Smoke-test defaults: process one training sample only. Override these
+    // Smoke-test defaults: process two training samples only. Override these
     // parameters when a batch or full-dataset regression is actually needed.
-    parameter TOTAL_TRAIN_SIZE = 1;
+    parameter TOTAL_TRAIN_SIZE = 2;
     parameter TOTAL_TEST_SIZE = 0;
-    parameter STOP_AFTER_FIRST_PROCESS_DONE = 1'b1;
+    parameter STOP_AFTER_FIRST_PROCESS_DONE = 1'b0;
+    parameter VCD_FILE = "build_axi_test/tb_axi4_rw_test_v1_0_M_AXI.vcd";
+    parameter integer SIM_TIMEOUT_NS = 20_000_000;
     // Vivado/xsim commonly launches from a generated run directory. Set this
     // to an absolute path on the machine running the simulation.
     parameter SPIKE_DATA_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/all_spikes.bin";
+    parameter WEIGHT_DATA_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/weights_weight.txt";
+    parameter POST_NEURON_STATE_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/post_neuron_state.txt";
+    parameter PRE_NEURON_STATE_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/pre_neuron_state.txt";
     parameter C_M_TARGET_SLAVE_WRITE_ADDR = 32'h01900000;
     parameter C_M_TARGET_SLAVE_READ_ADDR = 32'h00010000;
     parameter integer C_M_AXI_READ_BURST_LEN = 4;
@@ -174,7 +179,7 @@ Top_test #(
     .AERIN_ADDR                         (AER_IN_ADDR                ),
     .AERIN_REQ                          (AER_IN_REQ                 ),
     .IS_POS                             (IS_POS                    ),
-    .IS_TRAIN                           (IS_TRAIN                  ),
+    .IS_TRAIN                           (IS_TRAIN                ),
     .AERIN_ACK                          (AER_IN_ACK                 ),
     .GOODNESS                           (GOODNESS                  ),
     .PROCESS_DONE                       (PROCESS_DONE              )
@@ -194,8 +199,90 @@ bit [31:0] rd_burst_data [0:3];
 integer i, block_index = 0;
 integer aer_event_count = 0;
 integer tstep_event_count = 0;
+integer completed_sample_count = 0;
+
+    initial begin
+        $dumpfile(VCD_FILE);
+        // Keep the VCD focused: top-level AXI/AER signals plus the two control
+        // FSMs. Dumping every SRAM word makes a full-size run unnecessarily huge.
+        $dumpvars(0,
+            m_axi_aclk, SNN_CLK, m_axi_aresetn, m_axi_init_axi_txn,
+            train_enable_txn, STATE, IS_POS, IS_TRAIN,
+            AER_IN_ADDR, AER_IN_REQ, AER_IN_ACK,
+            PROCESS_DONE, GOODNESS,
+            m_axi_araddr, m_axi_arlen, m_axi_arvalid, m_axi_arready,
+            m_axi_rdata, m_axi_rvalid, m_axi_rready, m_axi_rlast,
+            m_axi_awaddr, m_axi_awvalid, m_axi_awready,
+            m_axi_wdata, m_axi_wvalid, m_axi_wready, m_axi_wlast,
+            m_axi_bvalid, m_axi_bready,
+            aer_event_count, tstep_event_count, completed_sample_count);
+        $dumpvars(0,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.mst_exec_state,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.sample_count,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.read_burst_counter,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.write_burst_counter,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.input_fifo_full,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.input_fifo_empty,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.input_fifo_rd_en,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.spike_data_vaild,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.u_parallel_to_serial.cnt,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.u_parallel_to_serial.tstep_cnt,
+            u_axi4_rw_test_v1_0.axi4_rw_test_v1_0_M_AXI_inst.u_parallel_to_serial.tstep_valid,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.state,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.T_step_cnt,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.post_neur_cnt,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.pre_neur_cnt,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.pre_neur_cnt_inc,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_NEUR_EVENT,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_TSTEP_EVENT,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_TREF_EVENT,
+            u_Top_test.u_ODIN_ffstdp.controller_inst.tref_finish,
+            u_Top_test.AEROUT_ADDR, u_Top_test.AEROUT_REQ,
+            u_Top_test.AEROUT_ACK,
+            u_Top_test.u_ODIN_ffstdp.AEROUT_CTRL_FINISH,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.fifo_empty,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.fifo_full,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.fifo_rd_en,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.fifo_wr_en,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.aer_out_start,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.aer_out_fifo_dout,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.AEROUT_ACK_sync,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.AEROUT_ACK_sync_del,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.aer_out_trans,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.syncFIFO_diffWidth_u0.wdata_empty,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.syncFIFO_diffWidth_u0.rdata_full,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.syncFIFO_diffWidth_u0.rdata_wr_en,
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.syncFIFO_diffWidth_u0.wdata_rd_en);
+    end
+
+    initial begin
+        #(SIM_TIMEOUT_NS);
+        $fatal(1,
+            "Simulation timeout: completed=%0d AXI_STATE=%03b AER_REQ=%b AER_ACK=%b",
+            completed_sample_count, STATE, AER_IN_REQ, AER_IN_ACK);
+    end
 
     always @(posedge SNN_CLK) begin
+        if (m_axi_aresetn &&
+            u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_POST_NEUR_WE &&
+            $isunknown(u_Top_test.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_in)) begin
+            $fatal(1, "Unknown post-neuron write: ctrl_state=%b addr=%0d post_q=%h post_d=%h syn_q=%h at %0t",
+                u_Top_test.u_ODIN_ffstdp.controller_inst.state,
+                u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_POST_NEURON_ADDRESS,
+                u_Top_test.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_out,
+                u_Top_test.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_in,
+                u_Top_test.u_ODIN_ffstdp.SYNARRAY_RDATA, $time);
+        end
+        if (m_axi_aresetn &&
+            u_Top_test.u_ODIN_ffstdp.u_aer_out.fifo_wr_en &&
+            $isunknown(u_Top_test.u_ODIN_ffstdp.u_aer_out.aer_out_fifo_din)) begin
+            $fatal(1, "Unknown AER FIFO input: addr=%0d events=%b post_q=%h post_d=%h syn_q=%h at %0t",
+                u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_POST_NEURON_ADDRESS,
+                u_Top_test.u_ODIN_ffstdp.NEUR_EVENT_OUT,
+                u_Top_test.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_out,
+                u_Top_test.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_in,
+                u_Top_test.u_ODIN_ffstdp.SYNARRAY_RDATA, $time);
+        end
         if (AER_IN_REQ && AER_IN_ACK) begin
             aer_event_count <= aer_event_count + 1;
             if (AER_IN_ADDR[11:10] == 2'b01) begin
@@ -205,8 +292,12 @@ integer tstep_event_count = 0;
             end
         end
         if (PROCESS_DONE) begin
-            $display("SNN sample complete: events=%0d timesteps=%0d goodness=%0d at %0t",
-                     aer_event_count, tstep_event_count, GOODNESS, $time);
+            completed_sample_count <= completed_sample_count + 1;
+            $display("SNN sample %0d complete: events=%0d timesteps=%0d goodness=%0d at %0t",
+                     completed_sample_count + 1, aer_event_count,
+                     tstep_event_count, GOODNESS, $time);
+            aer_event_count <= 0;
+            tstep_event_count <= 0;
             if (STOP_AFTER_FIRST_PROCESS_DONE) begin
                 $display("PASS: observed the first PROCESS_DONE; ending smoke test.");
                 $finish;
@@ -230,6 +321,23 @@ integer tstep_event_count = 0;
         end
 
         $display("Loaded %0d spike bytes from %s", bytes_read, SPIKE_DATA_FILE);
+    end
+
+    // Override the behavioral SRAM models' random power-up contents with the
+    // same trained weights and clean neuron state used by the Vivado design.
+    // Delay one tick so this runs after the SRAM models' own initial blocks.
+    initial begin
+        #1;
+        $readmemb(WEIGHT_DATA_FILE,
+            u_Top_test.u_ODIN_ffstdp.u_synaptic_core.u_sram_synaptic.SRAM,
+            0, DATA_SIZE * OUTPUT_NEURON / u_Top_test.POST_NEUR_PARALLEL - 1);
+        $readmemh(POST_NEURON_STATE_FILE,
+            u_Top_test.u_ODIN_ffstdp.neuron_core_inst.neurarray_post.SRAM,
+            0, OUTPUT_NEURON / u_Top_test.POST_NEUR_PARALLEL - 1);
+        $readmemh(PRE_NEURON_STATE_FILE,
+            u_Top_test.u_ODIN_ffstdp.neuron_core_inst.neurarray_pre.SRAM,
+            0, DATA_SIZE - 1);
+        $display("Loaded SNN weights and neuron state files.");
     end
 
   
@@ -290,6 +398,10 @@ integer tstep_event_count = 0;
         m_axi_rlast = 0;
         m_axi_ruser = 0;
         m_axi_rvalid = 0;
+        // The restored reference RTL contains the original internal SPI
+        // block; keep its pins idle for this AXI/AER regression.
+        u_Top_test.SCK = 1'b0;
+        u_Top_test.MOSI = 1'b0;
 
         // 复位
         #10 m_axi_aresetn = 1;
@@ -337,7 +449,10 @@ integer tstep_event_count = 0;
         end
 
 
-        #100 $finish;
+        #100;
+        $display("PASS: completed %0d samples and their AXI write responses.",
+                 completed_sample_count);
+        $finish;
     end
 // ---------------- AXI 从机（Slave�? 写响�? TASK ----------------
 // task axi_slave_write_response();

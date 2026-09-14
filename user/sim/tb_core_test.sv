@@ -1,233 +1,215 @@
 `timescale 1ns / 1ps
 
-module ODIN_ffstdp_tb();
-  // Parameters
-  parameter CLK_PERIOD = 4;
+// Direct SNN-core regression: no AXI master or input FIFO is involved.
+// Two MNIST samples are injected through the AER input handshake while
+// online learning is disabled (IS_TRAIN=0).
+module tb_core_test;
+    parameter integer CLK_PERIOD_NS = 4;
+    parameter integer SAMPLE_COUNT = 2;
+    parameter integer TIME_STEPS = 8;
+    parameter integer INPUT_NEURONS = 784;
+    parameter integer OUTPUT_NEURONS = 256;
+    parameter integer SIM_TIMEOUT_NS = 5_000_000;
 
-  // Signals
-  logic CLK;
-  logic RST;
-  logic IS_POS;
-  logic IS_TRAIN;
-  logic SCK;
-  logic MOSI;
-  logic MISO;
-  logic [11:0] AERIN_ADDR;
-  logic AERIN_REQ;
-  logic [15:0] cnt;
-  logic [15:0] pixel_index;
-  logic [7:0] aer_neur_spk;
-  logic AERIN_ACK;
-  logic [9:0] AEROUT_ADDR;
-  logic AEROUT_REQ;
-  logic AEROUT_ACK;
-  logic [31:0] GOODNESS;
-  logic ONE_SAMPLE_FINISH;
-  logic SCHED_FULL;
-  logic auto_ack_verbose;
+    // These absolute paths must be changed when the repository is moved.
+    parameter SPIKE_DATA_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/all_spikes.bin";
+    parameter WEIGHT_DATA_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/weights_weight.txt";
+    parameter POST_NEURON_STATE_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/post_neuron_state.txt";
+    parameter PRE_NEURON_STATE_FILE = "/home/mogreach/WorkSpace/Work-Local-Server/SNN_FFSTDP_version_1/Gen_out/MNIST/pre_neuron_state.txt";
+    parameter VCD_FILE = "build_core_test/tb_core_test.vcd";
 
-  // Instantiate the DUT (Device Under Test)
+    localparam integer SPIKE_BYTES_PER_SAMPLE = TIME_STEPS * INPUT_NEURONS / 8;
+    localparam integer SPIKE_BYTE_COUNT = SAMPLE_COUNT * SPIKE_BYTES_PER_SAMPLE;
 
-  Top_test dut(
-      .CLK                                (CLK                       ),
-      .RST                                (RST                       ),
-      .AERIN_ADDR                         (AERIN_ADDR                ),
-      .AERIN_REQ                          (AERIN_REQ                 ),
-      .IS_POS                             (IS_POS                    ),
-      .IS_TRAIN                           (IS_TRAIN                  ),
-      .AERIN_ACK                          (AERIN_ACK                 ),
-      .GOODNESS                           (GOODNESS                  ),
-      .PROCESS_DONE                       (ONE_SAMPLE_FINISH         )
-  );
-  assign AEROUT_ADDR = dut.AEROUT_ADDR;
-  assign AEROUT_REQ = dut.AEROUT_REQ;
-  assign AEROUT_ACK = dut.AEROUT_ACK;
-  // Clock generation
-  initial begin
-    CLK = 0;
-    forever #(CLK_PERIOD / 2) CLK = ~CLK;
-  end
-  always @(posedge CLK) begin
-    if (cnt == 784)
-      cnt <= 0;
-    else if(AERIN_REQ && AERIN_ACK)
-      cnt <= cnt + 1;
-    else
-      cnt <= cnt;
-  end
+    logic CLK;
+    logic RST;
+    logic IS_POS;
+    logic IS_TRAIN;
+    logic [11:0] AERIN_ADDR;
+    logic AERIN_REQ;
+    wire AERIN_ACK;
+    wire [31:0] GOODNESS;
+    wire PROCESS_DONE;
 
-    // **读取 TXT 文件**
-    parameter int N = 1000;   // 样本数
-    parameter int T = 8;    // 时间步
-    parameter int WIDTH = 784;  // 每个时间步的 bit 数
-    
-    bit spike_data_reshaped [0:N-1][0:T-1][0:WIDTH-1]; // 存储展开后的数据
-    integer file, byte_count;
-    bit [7:0] spike_byte;
-    integer bit_index = 0;
-    integer n_idx = 0, t_idx = 0, w_idx = 0;
-  initial begin
-      // file = $fopen("D:/BaiduSyncdisk/SNN_FFSTBP/sim/python/simulation_spikes.bin", "rb"); // 以二进制方式读取
-      // file = $fopen("D:/BaiduSyncdisk/SNN_FFSTBP/sim/python/all_spikes.bin", "rb"); // 以二进制方式读取
-      file = $fopen("D:/OneDrive/SNN_FFSTDP/Gen_out/MNIST/all_spikes.bin", "rb");
-      
-      if (file == 0) begin
-          $display("Error: Cannot open file!");
-          $finish;
-      end
+    // Top_test internally acknowledges its AER output. These aliases are
+    // observation-only signals for waveforms and counters.
+    wire [11:0] AEROUT_ADDR = dut.AEROUT_ADDR;
+    wire AEROUT_REQ = dut.AEROUT_REQ;
+    wire AEROUT_ACK = dut.AEROUT_ACK;
 
-      // 读取所有数据
-      while (!$feof(file) && n_idx < N) begin
-            byte_count = $fread(spike_byte, file); // 读取 1 字节（8-bit）
+    bit [7:0] spike_bytes [0:SPIKE_BYTE_COUNT-1];
+    integer spike_file;
+    integer bytes_read;
+    integer completed_samples;
+    integer input_events_this_sample;
+    integer output_spikes_this_sample;
+    integer accepted_tsteps_this_sample;
+    logic AEROUT_REQ_d;
 
-            if (byte_count > 0) begin
-                for (int i = 7; i >= 0; i--) begin
-                    spike_data_reshaped[n_idx][t_idx][w_idx] = spike_byte[i]; // 存入数组
-                    // 更新索引
-                    w_idx++;
-                    if (w_idx == WIDTH) begin
-                        w_idx = 0;
-                        t_idx++;
-                        if (t_idx == T) begin
-                            t_idx = 0;
-                            n_idx++;
-                        end
-                    end
-                    if (n_idx >= N) break; // 读取到 N 个样本后停止
-                end
-            end
-        end
-        $fclose(file);
-        $display("Spike data loaded successfully!");
-  end
-
-
-
-
-  always @(posedge CLK) begin
-    if (ONE_SAMPLE_FINISH)
-      IS_POS <= ~IS_POS;
-    else
-      IS_POS <= IS_POS;
-  end
-
-  // Reset and stimulus
-  initial begin                 
-  auto_ack_verbose = 1'b1;
-    fork
-      auto_ack(.req(AEROUT_REQ), .ack(AEROUT_ACK), .addr(AEROUT_ADDR), .neur(aer_neur_spk), .verbose(auto_ack_verbose));
-    join_none
-    // Initialize signals
-    RST = 1;
-    IS_POS = 0;
-    IS_TRAIN = 0;
-    SCK = 0;
-    MOSI = 0;
-    AERIN_ADDR = 12'b0;
-    AERIN_REQ = 0;
-    AEROUT_ACK = 0;
-    cnt = 0;
-
-    // Apply reset
-    #20;
-    RST = 0;
-
-    // Stimulus
-    #20;
-    IS_TRAIN = 1;
-    IS_POS = 1;
-    
-    // 重复调用 aer_send 任务
-    // for (int sample=0; sample < 5 ; sample++) begin
-    //   for (int t =0; t < 16 ; t++) begin
-    //     int send_count = 0;
-    //     for (int i = 0; i < 784; i++) begin
-    //       if (send_count < 256 && $urandom % 2 == 0) begin
-    //         aer_send (.addr_in({1'b0, 1'b0, cnt[9:0]}), .addr_out(AERIN_ADDR), .ack(AERIN_ACK), .req(AERIN_REQ));
-    //         send_count++;
-    //       end
-    //       wait_ns(10);
-    //     end
-    //     wait_ns(10);
-    //     aer_send (.addr_in({1'b0,1'b1,10'hFF}), .addr_out(AERIN_ADDR), .ack(AERIN_ACK), .req(AERIN_REQ));
-    //   end
-    // end
-
-          // 遍历 N 个样本，每个样本有 T 个时间步
-    for (int n = 0; n < N; n++) begin
-        int sample_index;
-        int time_index;
-        int pixel_index;
-        for (int t = 0; t < T; t++) begin
-            for (int pix = 0; pix < 784; pix++) begin
-                sample_index = n;  // 选择当前样本
-                time_index = t;    // 选择当前时间步
-                pixel_index = pix; // 选择当前像素
-                if (spike_data_reshaped[sample_index][time_index][pixel_index] == 1) begin
-                  aer_send (.addr_in({1'b0, 1'b0, pixel_index[9:0]}), .addr_out(AERIN_ADDR), .ack(AERIN_ACK), .req(AERIN_REQ));
-                  wait_ns(10);
-                end
-            end
-            aer_send (.addr_in({1'b0,1'b1,10'hFF}), .addr_out(AERIN_ADDR), .ack(AERIN_ACK), .req(AERIN_REQ));
-            wait_ns(10);
-        end
-        
-        if (n >= 20-1) begin
-            IS_TRAIN = 0;
-        end
-        $display("GOODNESS: %h", GOODNESS);
-    end
-    // Check results
-    
-
-    // Finish simulation
-    #200;
-    $finish;
-  end
-
-  // Monitor signals
-  //initial begin
-  //  $monitor("Time: %0t, AERIN_ADDR: %h, AERIN_REQ: %b, AERIN_ACK: %b, AEROUT_ADDR: %h, AEROUT_REQ: %b, AEROUT_ACK: %b, GOODNESS: %h, ONE_SAMPLE_FINISH: %b, SCHED_FULL: %b", 
-  //          $time, AERIN_ADDR, AERIN_REQ, AERIN_ACK, AEROUT_ADDR, AEROUT_REQ, AEROUT_ACK, GOODNESS, ONE_SAMPLE_FINISH, SCHED_FULL);
-  //end
-  task automatic aer_send (
-    input  logic [11:0] addr_in,
-    ref    logic [11:0] addr_out,
-    ref    logic          ack,
-    ref    logic          req
-);
-    while (ack) wait_ns(1);
-    addr_out = addr_in;
-    wait_ns(5);
-    req = 1'b1;
-    while (!ack) wait_ns(1);
-    wait_ns(5);
-    req = 1'b0;
-endtask    
-task automatic auto_ack (
-        ref    logic       req,
-        ref    logic       ack,
-        ref    logic [11:0] addr,
-        ref    logic [11:0] neur,
-        ref    logic       verbose
+    Top_test #(
+        .TIME_STEP    (TIME_STEPS),
+        .INPUT_NEURON (INPUT_NEURONS),
+        .OUTPUT_NEURON(OUTPUT_NEURONS)
+    ) dut (
+        .CLK         (CLK),
+        .RST         (RST),
+        .AERIN_ADDR  (AERIN_ADDR),
+        .AERIN_REQ   (AERIN_REQ),
+        .IS_POS      (IS_POS),
+        .IS_TRAIN    (IS_TRAIN),
+        .AERIN_ACK   (AERIN_ACK),
+        .GOODNESS    (GOODNESS),
+        .PROCESS_DONE(PROCESS_DONE)
     );
-    
-        forever begin
-            while (~req) wait_ns(1);
-            wait_ns(100);
-            neur = addr;
-            if (verbose)
-                $display("----- NEURON OUTPUT SPIKE (FROM AER): Event from neuron %d", neur);
-            ack = 1'b1;
-            while (req) wait_ns(1);
-            wait_ns(100);
-            ack = 1'b0;
-        end
-	endtask
 
-  	task wait_ns;
-        input   tics_ns;
-        integer tics_ns;
-        #tics_ns;
+    initial begin
+        CLK = 1'b0;
+        forever #(CLK_PERIOD_NS / 2) CLK = ~CLK;
+    end
+
+    // Dump the complete testbench/DUT hierarchy for debugging, including the
+    // controller, neuron/synapse cores, FIFOs, and behavioral SRAM contents.
+    initial begin
+        $dumpfile(VCD_FILE);
+        $dumpvars(0, tb_core_test);
+    end
+
+    initial begin
+        #(SIM_TIMEOUT_NS);
+        $fatal(1,
+            "Simulation timeout: completed=%0d AERIN_REQ=%b AERIN_ACK=%b controller_state=%b",
+            completed_samples, AERIN_REQ, AERIN_ACK,
+            dut.u_ODIN_ffstdp.controller_inst.state);
+    end
+
+    // Load only the two requested samples. Pixel zero is stored in bit 7 of
+    // each source byte, matching the layout used by the original core TB.
+    initial begin
+        spike_file = $fopen(SPIKE_DATA_FILE, "rb");
+        if (spike_file == 0)
+            $fatal(1, "Cannot open spike file: %s", SPIKE_DATA_FILE);
+        bytes_read = $fread(spike_bytes, spike_file);
+        $fclose(spike_file);
+        if (bytes_read < SPIKE_BYTE_COUNT)
+            $fatal(1, "Spike file too short: got %0d bytes, need %0d",
+                   bytes_read, SPIKE_BYTE_COUNT);
+        $display("Loaded %0d spike bytes for %0d samples.",
+                 bytes_read, SAMPLE_COUNT);
+    end
+
+    // Replace the behavioral SRAM models' random power-up values with the
+    // generated MNIST initialization files after their initial blocks finish.
+    initial begin
+        #1;
+        $readmemb(WEIGHT_DATA_FILE,
+            dut.u_ODIN_ffstdp.u_synaptic_core.u_sram_synaptic.SRAM,
+            0, INPUT_NEURONS * OUTPUT_NEURONS / dut.POST_NEUR_PARALLEL - 1);
+        $readmemh(POST_NEURON_STATE_FILE,
+            dut.u_ODIN_ffstdp.neuron_core_inst.neurarray_post.SRAM,
+            0, OUTPUT_NEURONS / dut.POST_NEUR_PARALLEL - 1);
+        $readmemh(PRE_NEURON_STATE_FILE,
+            dut.u_ODIN_ffstdp.neuron_core_inst.neurarray_pre.SRAM,
+            0, INPUT_NEURONS - 1);
+        $display("Loaded SNN weights and neuron states.");
+    end
+
+    always @(posedge CLK) begin
+        if (!RST && AERIN_REQ && AERIN_ACK) begin
+            if (AERIN_ADDR[11:10] == 2'b01)
+                accepted_tsteps_this_sample <= accepted_tsteps_this_sample + 1;
+            else if (AERIN_ADDR[11:10] == 2'b00)
+                input_events_this_sample <= input_events_this_sample + 1;
+        end
+
+        AEROUT_REQ_d <= AEROUT_REQ;
+        if (!RST && AEROUT_REQ && !AEROUT_REQ_d && AEROUT_ADDR[11:10] == 2'b00)
+            output_spikes_this_sample <= output_spikes_this_sample + 1;
+
+        if (!RST && PROCESS_DONE) begin
+            completed_samples <= completed_samples + 1;
+            $display(
+                "SNN sample %0d complete: input_events=%0d timesteps=%0d output_spikes=%0d goodness=%0d at %0t",
+                completed_samples + 1, input_events_this_sample,
+                accepted_tsteps_this_sample, output_spikes_this_sample,
+                GOODNESS, $time);
+            input_events_this_sample <= 0;
+            accepted_tsteps_this_sample <= 0;
+            output_spikes_this_sample <= 0;
+        end
+
+        if (!RST && dut.u_ODIN_ffstdp.controller_inst.CTRL_POST_NEUR_WE &&
+            $isunknown(dut.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_in))
+            $fatal(1, "Unknown value in post-neuron write at %0t", $time);
+
+        if (!RST && dut.u_ODIN_ffstdp.u_aer_out.fifo_wr_en &&
+            $isunknown(dut.u_ODIN_ffstdp.u_aer_out.aer_out_fifo_din))
+            $fatal(1, "Unknown value in AER output FIFO write at %0t", $time);
+    end
+
+    initial begin : stimulus
+        integer sample_index;
+        integer time_index;
+        integer pixel_index;
+        integer flat_bit_index;
+        integer byte_index;
+        integer bit_in_byte;
+
+        RST = 1'b1;
+        IS_POS = 1'b1;
+        IS_TRAIN = 1'b0;
+        AERIN_ADDR = 12'd0;
+        AERIN_REQ = 1'b0;
+        completed_samples = 0;
+        input_events_this_sample = 0;
+        accepted_tsteps_this_sample = 0;
+        output_spikes_this_sample = 0;
+        AEROUT_REQ_d = 1'b0;
+        // Top_test keeps the original SPI block internally. It is unused in
+        // this direct-AER regression, so hold its pins at known idle values.
+        dut.SCK = 1'b0;
+        dut.MOSI = 1'b0;
+
+        repeat (5) @(posedge CLK);
+        @(negedge CLK);
+        RST = 1'b0;
+
+        for (sample_index = 0; sample_index < SAMPLE_COUNT; sample_index = sample_index + 1) begin
+            for (time_index = 0; time_index < TIME_STEPS; time_index = time_index + 1) begin
+                for (pixel_index = 0; pixel_index < INPUT_NEURONS; pixel_index = pixel_index + 1) begin
+                    flat_bit_index = (sample_index * TIME_STEPS + time_index)
+                                   * INPUT_NEURONS + pixel_index;
+                    byte_index = flat_bit_index / 8;
+                    bit_in_byte = 7 - (flat_bit_index % 8);
+                    if (spike_bytes[byte_index][bit_in_byte])
+                        send_aer_event({2'b00, pixel_index[9:0]});
+                end
+                send_aer_event({2'b01, 10'd0});
+            end
+
+            wait (completed_samples == sample_index + 1);
+            $display("Sample %0d PROCESS_DONE observed; starting next sample.",
+                     sample_index + 1);
+        end
+
+        repeat (10) @(posedge CLK);
+        if (completed_samples != SAMPLE_COUNT)
+            $fatal(1, "Expected %0d completed samples, got %0d",
+                   SAMPLE_COUNT, completed_samples);
+        $display("PASS: inference mode completed %0d samples with IS_TRAIN=%b.",
+                 completed_samples, IS_TRAIN);
+        $finish;
+    end
+
+    task automatic send_aer_event(input logic [11:0] event_addr);
+        begin
+            while (AERIN_ACK) @(posedge CLK);
+            @(negedge CLK);
+            AERIN_ADDR = event_addr;
+            AERIN_REQ = 1'b1;
+            while (!AERIN_ACK) @(posedge CLK);
+            @(negedge CLK);
+            AERIN_REQ = 1'b0;
+            while (AERIN_ACK) @(posedge CLK);
+        end
     endtask
 endmodule
