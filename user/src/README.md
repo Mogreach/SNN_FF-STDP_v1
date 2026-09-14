@@ -1,6 +1,6 @@
 # RTL 源码
 
-> 当前 AXI+FF-STDP 集成入口是 `snn_ff/Top_test.v` 的单层 784→256 网络。下面的 LRF、多核与多层内容是 `Top.sv`/`Top_test_1.v` 历史变体说明，不代表当前 Block Design 的有效数据通路。
+> 当前 AXI+FF-STDP 集成入口是 `snn_ff/Top_test.v` 的单层 784→256 网络。下面 LRF、多核与多层部分来自早期设计笔记，其中提到的 `Top.sv`、`Top_test_1.v`、`Top_784-512-512.v`、`aer_in_lrf_mapper.sv`、`aer_core_event_arbiter.sv` 等文件**已不在本归档中**，仅作背景资料保留，不代表当前 Block Design 的有效数据通路。
 
 ## 历史 LRF-SNN based AER 事件驱动设计说明
 设计源代码目录在*user-src-snn_ff*，仿真代码在*user-sim*。vivado工程文件在*prj/snn_pl_axi_ddr*；顶层文件为 Top.sv，顶层测试tb文件为tb_top_lrf_odins.sv，该顶层展示了一层Cin * Hin * Win，在感受野为Cin * LRF_H * LRF_W下，输出Cout * Hout * W_out的局部感受野网络，详细自定义设计参数见顶层说明。具体仿真波形结合vivado项目运行查看。**输入输出事件遵循Req-Ack协议。**
@@ -57,4 +57,4 @@
 4. Vivado Block Design/module reference 是否重新刷新。
 5. Vitis `main.c` 的文件名、样本数、结果基址及 `test_labels.h`。
 
-当前源码存在历史变体（`Top.v`、`Top_test_1.v`、`Top_784-512-512.v` 等），且多个文件可能声明相同模块名。加入 Vivado file set 时只保留目标顶层所需变体，避免重复定义。
+当前 `user/src` 中只有 `snn_ff/Top_test.v` 一个顶层定义，不存在同名或历史变体文件。加入 Vivado file set 时使用本目录的相对路径，不要引用 `prj/` 下的同名快照。

@@ -2,7 +2,7 @@
 
 > 文档定位：本文件是本仓库的总学习文档和复现入口，以当前归档代码为准。旧版设计笔记中的概念、截图和调试经验被保留，但与当前代码不一致的 Zynq-7010、DMA FIFO 环路、50 MHz 单时钟和 EMIO 控制方案不再作为已实现功能描述。
 
-## 1. 新人先看这里
+## 1. 先看这里
 
 ### 1.1 项目做什么
 
@@ -38,15 +38,15 @@
 
 当前仓库是研发归档，不是“克隆后一步跑通”的发布包。以下差异需要先统一：
 
-- `hardware_sim/hardware_sim_config.py` 与当前 `Top_test` 已统一为 784→256、T=8、并行度 8；重新生成数据后仍需核对模型 checkpoint 是否就是这一结构。
+- `hardware_sim/hardware_sim_config.py` 与当前 `Top_test` 已统一为 784→256、T=8、并行度 8；`NET_PATH` 现指向仓库内的 `./hardware_sim/MNIST_91.pth`（相对仓库根目录），重新生成数据前仍需核对这个 checkpoint 的结构是否就是该配置。
 - AXI 封装层的样本数/写基址会覆盖内层默认值。有效默认值是训练 `2×50000`、测试 `10×10000`、写基址 `0x12D1_2800`；不要只看 `_M_AXI.v` 文件顶部。
 - PS 工程有多个 `main.c` 副本：`prj/snn_test/src/main.c` 默认文件名是 `fashionmnist.bin`，`prj/snn_pl_axi_ddr/vitis/snn_test/src/main.c` 默认是 `all_spikes.bin`。
 - Vitis 程序写结果读取基址仍定义为 `0x0B00_0000`，与当前 AXI 封装写基址 `0x12D1_2800` 不一致。上板前必须选定一个地址并两端同步。
 - 已有历史综合网表不等于当前源码可以干净重建；重新综合前仍需对当前 file set 做一次从零编译和回归。
-- `gen_model_weight_coe.py` 当前只导出首层，适合现行单层顶层；若切回历史多层变体，需要扩展为逐层导出并解决源码标注的 COE 行对齐问题。
-- `gen_sigmoid.py` 的 ROM 输出路径仍指向不存在的 `hardware/src/...`，应改为 `user/src/...` 或只使用生成的 COE。
+- `gen_model_weight_coe.py` 当前只导出首层，适合现行单层顶层；若将来扩展为多层，需要改为逐层导出并解决源码标注的 COE 行对齐问题。当前归档中已无多层顶层文件。
+- `gen_sigmoid.py` 生成 ROM RTL 时写入的是不存在的 `hardware/src/...`，应改为 `user/src/snn_ff/rom/...` 或只使用它同时导出的 COE。
 - `system.tcl` 是历史导出脚本，脚本开头临时建工程使用 `xc7z010clg400-1`，而主工程/当前 BD 是 Z-7030。应在 Z-7030 工程中复用 BD 内容，不能盲目执行默认建工程分支。
-- 当前单层 `Top_test` 已通过 Icarus Verilog 11 干净展开；系统 testbench 仍依赖 Vivado 的 `axi_input_fifo` 行为模型，应在 xsim 中完成全流程回归。
+- 当前单层 `Top_test` 已通过 Icarus Verilog 11 干净展开；Icarus 环境用 `user/sim/iverilog/axi_input_fifo_model.sv` 行为模型替代 FIFO Generator IP，两套 TB 均可在 Icarus 下回归，xsim 工程回归仍应使用 Vivado 生成的行为模型。
 
 这些项目在本文末尾给出建议修复顺序。
 
@@ -61,7 +61,7 @@ SNN_FFSTDP_version_1/
 ├── user/
 │   ├── src/
 │   │   ├── axi_rw/                  # DDR AXI master + 32→4 FIFO 后端 + AER 转换
-│   │   └── snn_ff/                  # 当前单层顶层、历史多层变体、控制器、神经元、突触、SRAM
+│   │   └── snn_ff/                  # 当前单层顶层、控制器、神经元、突触、SRAM、ROM、FIFO
 │   ├── sim/                         # testbench 与 Icarus 工作区
 │   ├── data/                        # XDC、历史 COE
 │   └── script/                      # Block Design、SAIF/功耗脚本
@@ -283,14 +283,14 @@ PROCESS_DONE + GOODNESS
 
 核的输出 AER 由顶层形成 6 拍延迟 ack，以便输出事件完整排空。`ONE_SAMPLE_FINISH` 直接导出为 `PROCESS_DONE`，核内的 32-bit `GOODNESS` 直接导出，不再经过历史两层版本的跨层累加器。
 
-`AVG_GOODNESS` 在 `Top_test` 中显式接零是安全的：`synaptic_core.v` 当前没有把该信号接入 `ffstdp_update`，因此它只是保留接口，不参与权重更新。只有重新启用 moving-average 学习分支时，才必须恢复 `goodness_moving_avg.v` 及其清零/有效握手。参数化的 `Top_test_1.v` 和 `Top_784-512-512.v` 是历史多层变体，不能与当前同名模块一起加入 Vivado file set。
+`AVG_GOODNESS` 在 `Top_test` 中显式接零是安全的：`synaptic_core.v` 当前没有把该信号接入 `ffstdp_update`，因此它只是保留接口，不参与权重更新。只有重新启用 moving-average 学习分支时，才必须重新实现 goodness 移动平均模块及其清零/有效握手。早期笔记提到的多层变体 `Top_test_1.v`、`Top_784-512-512.v` 已不在当前归档中，`user/src` 内只有 `Top_test` 一个顶层定义。
 
 ### 6.2 单层 `ODIN_ffstdp`
 
 单层核心的主要组成：
 
 ```text
-AER input / SPI
+AER input
        |
        v
   controller <----> scheduler FIFO
@@ -448,34 +448,37 @@ python hardware_sim/gen_sigmoid.py
 ### 9.1 推荐分层验证
 
 1. `tb_parallel_to_serial.sv`：确认 32→4 后的 4 个时间位如何变成 AER 地址/请求。
-2. `tb_aer_lrf_mapper.sv`：确认层间事件类型和地址宽度映射。
-3. `tb_aer_core_event_arbiter.sv`：确认多核仲裁无丢事件/重复事件。
-4. `ffstdp_update` 单元测试：正/负方向、补码、饱和边界和 ROM 延迟。
-5. `tb_odin_ffstbp.sv`：单层从输入事件到 goodness/权重写回。
-6. `tb_top_lrf_odins.sv`：层间 req/ack、最后一层 ack 和多层 goodness。
-7. `tb_axi4_rw_test_v1_0_M_AXI.sv`：DDR 行为模型、AXI、FIFO、SNN、结果写回全链路。
+2. `tb_odin_ffstbp.sv`：单个 `ODIN_ffstdp` 核的激励。
+3. `ffstdp_update` 单元测试：正/负方向、补码、饱和边界和 ROM 延迟（尚待补充）。
+4. `tb_core_test.sv`：不经过 AXI，直接用 AER 握手驱动单层 `Top_test`。
+5. `tb_axi4_rw_test_v1_0_M_AXI.sv`：DDR 行为模型、AXI、FIFO、SNN、结果写回全链路。
 
-当前校验以 `tb_axi4_rw_test_v1_0_M_AXI.sv` 为 AXI+SNN 集成验收入口。恢复版 `if_neuron` 已完成阈值、计数、膜电位复位和 TREF 清零的单元 smoke test；当前 784×256 `Top_test` 完整层次也已通过 Icarus elaboration。另用临时 32→4 bit FIFO 行为模型把同一 TB 缩小为 `DATA_SIZE=16`、`OUTPUT_NEURON=8`、T=8、1 个训练条目，已观察到 8 个 timestep、`PROCESS_DONE`、goodness=101 和 AXI 写回后正常退出。默认全尺寸的最终功能回归仍必须在 Vivado/xsim 中包含工程生成的 `axi_input_fifo` 仿真模型。
+当前校验以 `tb_axi4_rw_test_v1_0_M_AXI.sv` 为 AXI+SNN 集成验收入口，`tb_core_test.sv` 为纯核心入口。两者默认都跑 2 个 MNIST 样本、8 个时间步：core 入口固定 `IS_TRAIN=0`，AXI 入口跑 2 个训练条目并核对 goodness 写回；当前都产生 `PROCESS_DONE` 并以 `PASS` 退出。恢复版 `if_neuron` 已完成阈值、计数、膜电位复位和 TREF 清零的单元 smoke test；当前 784×256 `Top_test` 完整层次也已通过 Icarus elaboration。
 
 ### 9.2 Icarus Verilog
 
-`user/sim/iverilog/build/iverilog_filelist.f` 当前含原机器绝对路径，应先改成仓库路径。典型命令：
+两套回归脚本位于 `user/sim/iverilog/`，源文件清单为 `core_test_filelist.f` 和 `axi_snn_filelist.f`，均使用仓库相对路径：
 
 ```sh
 cd user/sim/iverilog
-iverilog -g2012 -f build/iverilog_filelist.f -o build/tb_odin_ffstdp_iverilog.vvp
-vvp build/tb_odin_ffstdp_iverilog.vvp
+./run_core_test.sh     # 纯 SNN core -> build_core_test/
+./run_axi_snn.sh       # AXI+SNN     -> build_axi_test/
 ```
 
-如果使用 Vivado IP（如 `axi_input_fifo` 或 Block Memory Generator），Icarus 需要可用的行为模型；否则优先在 xsim 中跑系统级 testbench。
+Icarus 环境用 `axi_input_fifo_model.sv` 行为模型替代 Vivado 的 `axi_input_fifo` IP。若在 xsim 中跑系统级 testbench，应改用工程生成的行为模型，否则只能完成 RTL 展开检查。
 
 ### 9.3 Vivado/xsim 系统 testbench 数据路径
 
-`tb_axi4_rw_test_v1_0_M_AXI.sv` 使用 `$fopen(SPIKE_DATA_FILE, "rb")` 和 `$fread` 直接读取生成的原始 `all_spikes.bin`，不是 `$readmemh` 文本。Vivado 仿真会把工作目录切换到工程生成的 run 目录，因此这里有意使用绝对路径。每次换机器、移动仓库或切换 MNIST/FashionMNIST 时，必须修改 testbench 文件顶部的：
+`tb_axi4_rw_test_v1_0_M_AXI.sv` 使用 `$fopen(SPIKE_DATA_FILE, "rb")` 和 `$fread` 直接读取生成的原始 `all_spikes.bin`，不是 `$readmemh` 文本。Vivado 仿真会把工作目录切换到工程生成的 run 目录，因此这里有意使用绝对路径。每次换机器、移动仓库或切换 MNIST/FashionMNIST 时，必须修改 testbench 文件顶部的四个路径参数：
 
 ```systemverilog
-parameter SPIKE_DATA_FILE = "/本机绝对路径/Gen_out/MNIST/all_spikes.bin";
+parameter SPIKE_DATA_FILE        = "/本机绝对路径/Gen_out/MNIST/all_spikes.bin";
+parameter WEIGHT_DATA_FILE       = "/本机绝对路径/Gen_out/MNIST/weights_weight.txt";
+parameter POST_NEURON_STATE_FILE = "/本机绝对路径/Gen_out/MNIST/post_neuron_state.txt";
+parameter PRE_NEURON_STATE_FILE  = "/本机绝对路径/Gen_out/MNIST/pre_neuron_state.txt";
 ```
+
+`tb_core_test.sv` 顶部是同样四个参数。两个 TB 都从 DUT 层次写入行为 SRAM 的初值，SRAM 模块本身不再加载文件。
 
 同时核对 `TOTAL_TRAIN_SIZE`、`TOTAL_TEST_SIZE`、`TIME_TOTAL_STEP` 和 `DATA_SIZE`。TB 的 byte RAM 深度按下式计算，并会在文件不足时立即报错：
 
@@ -483,7 +486,7 @@ parameter SPIKE_DATA_FILE = "/本机绝对路径/Gen_out/MNIST/all_spikes.bin";
 (TOTAL_TRAIN_SIZE + TOTAL_TEST_SIZE) × TIME_TOTAL_STEP × DATA_SIZE / 8
 ```
 
-日常 smoke test 默认只跑 1 个训练条目，并在第一次 `PROCESS_DONE` 后结束，不需要等待完整数据集。若要观察随后发生的 AXI goodness 写回，将 `STOP_AFTER_FIRST_PROCESS_DONE=0`；若要跑批量数据，再同时覆盖训练/测试条目数。
+当前 TB 默认跑 2 个训练条目（`TOTAL_TEST_SIZE=0`）、`STOP_AFTER_FIRST_PROCESS_DONE=0`，即完整跑到 AXI goodness 写回为止。若只需快速 smoke test，把 `STOP_AFTER_FIRST_PROCESS_DONE` 设为 `1'b1`，第一次 `PROCESS_DONE` 后即结束；若要跑批量数据，再同时覆盖训练/测试条目数。
 
 ### 9.4 波形验收点
 
@@ -683,8 +686,8 @@ SD 加载完成不自动启动 PL；用户仍需按 `key_train_enable` 选择是
 5. 统一 PL `WRITE_BASE` 与 PS `DDR_PL_OUT_WR_BASE`。
 6. 让 SD 程序不自动格式化、处理非 4-byte 末块、检查文件大小和 DDR 上界。
 7. 把按键启动替换为 PS 可控寄存器，并加入 busy/done/error/IRQ；保留按键作为调试旁路。
-8. 增加权重打包/解包 round-trip 单元测试；若恢复多层顶层，再扩展 Python 的逐层导出。
-9. 清理同名历史顶层和脚本中的失效 Windows 路径，提供可重建 Vivado Tcl 与 Vitis workspace 创建说明；系统 TB 的数据绝对路径保留为显式本机配置项。
+8. 增加权重打包/解包 round-trip 单元测试；`gen_model_weight_coe.py` 目前只导出首层，与现行单层网络一致。
+9. 清理脚本中的失效 Windows 路径（`gen_data_flow.py`/`gen_model_weight_coe.py` 的 `sys.path`、`gen_sigmoid.py` 的 ROM 输出路径），提供可重建 Vivado Tcl 与 Vitis workspace 创建说明；系统 TB 的数据绝对路径保留为显式本机配置项。
 10. 把系统 testbench 改为自检式，并在小数据集上比较软件与 RTL 每条 goodness。
 11. 最后再做并行度、关键路径、BRAM bank 和功耗优化。
 
@@ -722,6 +725,8 @@ SD 加载完成不自动启动 PL；用户仍需按 `key_train_enable` 选择是
 | 权重导出 | `hardware_sim/gen_model_weight_coe.py` |
 | 梯度 ROM | `hardware_sim/gen_sigmoid.py` |
 | 板级约束 | `user/data/axi4_ddr_rw.xdc` |
+| Icarus 回归入口 | `user/sim/iverilog/README.md` |
+| core / AXI testbench | `user/sim/tb_core_test.sv`、`user/sim/tb_axi4_rw_test_v1_0_M_AXI.sv` |
 
 ## 附录 B：一次实验的最小记录模板
 

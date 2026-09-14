@@ -106,8 +106,6 @@ module aer_outs #(
     wire               [    T_LOG2: 0]                                      post_neur_cnt[0:POST_NEUR_PARALLEL-1];
     reg                [2*(T_LOG2+1)-1: 0]                                  post_neur_goodness[0:POST_NEUR_PARALLEL-1];
     wire               [(2*(T_LOG2+1)*POST_NEUR_PARALLEL)-1: 0]             post_neur_goodness_bus;
-    wire               [2*(T_LOG2+1): 0]        post_neur_goodness_add1     ;
-    wire               [2*(T_LOG2+1): 0]        post_neur_goodness_add2     ;
     wire [2*(T_LOG2+1)+$clog2(POST_NEUR_PARALLEL)-1:0] post_neur_goodness_sum;
 
     assign                              rst_activity                = RST;
@@ -158,18 +156,6 @@ module aer_outs #(
         .in(post_neur_goodness_bus),
         .out(post_neur_goodness_sum)
     );
-    // assign post_neur_goodness_add1 = post_neur_goodness[0] + post_neur_goodness[1];
-    // assign post_neur_goodness_add2 = post_neur_goodness[2] + post_neur_goodness[3];
-    // assign post_neur_goodness_sum = post_neur_goodness_add1 + post_neur_goodness_add2;
-
-    // adder_tree #(
-    //     .NUM(POST_NEUR_PARALLEL),
-    //     .IN_WIDTH(2*(T_LOG2+1))
-    // ) u_adder_tree (
-    //     .in(post_neur_goodness),
-    //     .sum(post_neur_goodness_sum)
-    // );
-
 
     always @(posedge CLK or posedge rst_activity)           
         begin                                        

@@ -86,15 +86,9 @@ module ODIN_ffstdp #(
     wire                                CTRL_SCHED_EVENT_IN         ;
     wire               [   1: 0]        CTRL_SCHED_VIRTS            ;
     wire                                CTRL_AEROUT_POP_NEUR        ;
-    wire                                CTRL_SYNA_WR_EVENT          ;// 突触写事件
-    wire                                CTRL_SYNA_RD_EVENT          ;// 突触读事件
-    wire               [WEIGHT_WIDTH-1: 0]        CTRL_SYNA_PROG_DATA         ;// 突触编程数据
     wire                                CTRL_NEUR_EVENT             ;// 神经元事件
     wire                                CTRL_TSTEP_EVENT            ;// 时间步事件
     wire                                CTRL_TREF_EVENT             ;// 时间参考事件
-    wire                                CTRL_WR_NEUR_EVENT          ;// 写神经元事件
-    wire                                CTRL_RD_NEUR_EVENT          ;// 读神经元事件
-    wire               [POST_NEUR_DATA_WIDTH-1:0]        CTRL_POST_NEUR_PROG_DATA    ;// 神经元编程数据
     wire               [PRE_NEUR_ADDR_WIDTH-1:0]        CTRL_PRE_NEURON_ADDRESS     ;// 预神经元地址
     wire               [PRE_NEUR_ADDR_WIDTH-1:0]        CTRL_POST_NEURON_ADDRESS    ;// 后神经元地址
     wire                                CTRL_PRE_NEUR_CS            ;
@@ -113,7 +107,6 @@ module ODIN_ffstdp #(
     wire               [AER_WIDTH-1: 0]        SCHED_DATA_OUT              ;
     
     // Neuron core
-    wire               [POST_NEUR_DATA_WIDTH-1:0]        NEUR_STATE                  ;
     wire               [POST_NEUR_PARALLEL-1:0]        NEUR_EVENT_OUT              ;// 神经元输出事件
     wire               [PRE_NEUR_DATA_WIDTH-1:0]        PRE_NEUR_S_CNT              ;// 预神经元脉冲计数
     wire               [POST_NEUR_SPIKE_CNT_WIDTH * POST_NEUR_PARALLEL -1 :0]POST_NEUR_S_CNT            ;
@@ -230,14 +223,6 @@ module ODIN_ffstdp #(
     .CTRL_SYNARRAY_CS                   (CTRL_SYNARRAY_CS          ),// 突触数组选择信号
     .CTRL_SYNARRAY_WE                   (CTRL_SYNARRAY_WE          ),// 突触数组写使能信号
 
-    .CTRL_SYNA_WR_EVENT                 (CTRL_SYNA_WR_EVENT        ),// 突触写事件
-    .CTRL_SYNA_RD_EVENT                 (CTRL_SYNA_RD_EVENT        ),// 突触读事件
-    .CTRL_SYNA_PROG_DATA                (CTRL_SYNA_PROG_DATA       ),// 突触编程数据
-
-        // Outputs to Neurons -------------------------------------
-    .CTRL_WR_NEUR_EVENT                 (CTRL_WR_NEUR_EVENT        ),// 写神经元事件
-    .CTRL_RD_NEUR_EVENT                 (CTRL_RD_NEUR_EVENT        ),// 读神经元事件
-    .CTRL_POST_NEUR_PROG_DATA           (CTRL_POST_NEUR_PROG_DATA  ),// 神经元编程数据
     .CTRL_PRE_NEURON_ADDRESS            (CTRL_PRE_NEURON_ADDRESS   ),// 预神经元地址
     .CTRL_POST_NEURON_ADDRESS           (CTRL_POST_NEURON_ADDRESS  ),// 后神经元地址
     .CTRL_PRE_NEUR_CS                   (CTRL_PRE_NEUR_CS          ),// 预神经元选择信号
@@ -333,9 +318,6 @@ module ODIN_ffstdp #(
         .CTRL_SYNARRAY_WE                   (CTRL_SYNARRAY_WE          ),
         .CTRL_SYNARRAY_ADDR                 (CTRL_SYNARRAY_ADDR        ),
         .CTRL_POST_NEURON_ADDRESS           (CTRL_POST_NEURON_ADDRESS  ),
-        .CTRL_SYNA_WR_EVENT                 (CTRL_SYNA_WR_EVENT        ),
-        .CTRL_SYNA_RD_EVENT                 (CTRL_SYNA_RD_EVENT        ),
-        .CTRL_SYNA_PROG_DATA                (CTRL_SYNA_PROG_DATA       ),
         .CTRL_NEUR_EVENT                    (CTRL_NEUR_EVENT           ),
         .CTRL_TSTEP_EVENT                   (CTRL_TSTEP_EVENT          ),
         .CTRL_TREF_EVENT                    (CTRL_TREF_EVENT           ),
@@ -378,11 +360,8 @@ module ODIN_ffstdp #(
     .SYNARRAY_RDATA                     (SYNARRAY_RDATA            ),// 从突触数组读取的输入数据
 
         // Controller inputs ----------------------------------------
-    .CTRL_POST_NEUR_PROG_DATA           (CTRL_POST_NEUR_PROG_DATA  ),// 神经元编程数据
     .CTRL_PRE_NEURON_ADDRESS            (CTRL_PRE_NEURON_ADDRESS   ),// 预神经元地址
     .CTRL_POST_NEURON_ADDRESS           (CTRL_POST_NEURON_ADDRESS  ),// 后神经元地址
-    .CTRL_WR_NEUR_EVENT                 (CTRL_WR_NEUR_EVENT        ),// 写神经元事件
-    .CTRL_RD_NEUR_EVENT                 (CTRL_RD_NEUR_EVENT        ),// 读神经元事件
     .CTRL_NEUR_EVENT                    (CTRL_NEUR_EVENT           ),// 神经元事件
     .CTRL_TSTEP_EVENT                   (CTRL_TSTEP_EVENT          ),// 时间步事件
     .CTRL_TREF_EVENT                    (CTRL_TREF_EVENT           ),// 时间参考事件
@@ -393,7 +372,6 @@ module ODIN_ffstdp #(
     .CTRL_PRE_CNT_EN                    (CTRL_PRE_CNT_EN           ),// 预计数器使能信号
 
         // Outputs ----------------------------------------
-    .NEUR_STATE                         (NEUR_STATE                ),// 神经元状态
     .NEUR_EVENT_OUT                     (NEUR_EVENT_OUT            ),// 神经元事件输出
     .PRE_NEUR_S_CNT                     (PRE_NEUR_S_CNT            ),// 预神经元脉冲计数
     .POST_NEUR_S_CNT                    (POST_NEUR_S_CNT           )

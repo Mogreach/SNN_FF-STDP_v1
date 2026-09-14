@@ -11,7 +11,7 @@
 | `hardware_sim/` | 软件模型对接、脉冲数据生成、量化和初始化文件生成脚本 |
 | `Gen_out/` | MNIST/FashionMNIST 数据、权重、神经元状态和 SAIF 产物 |
 | `user/src/` | 可维护的 RTL 源码；核心入口为 `snn_ff/Top_test.v` |
-| `user/sim/` | 模块级和系统级 testbench、Icarus Verilog 产物 |
+| `user/sim/` | 模块级和系统级 testbench、Icarus Verilog 回归脚本与工作区 |
 | `user/data/` | 约束和存储器初始化文件 |
 | `user/script/` | Block Design 重建及功耗分析脚本 |
 | `prj/` | Vivado/Vitis 工程、生成物和 PS 裸机程序；体量大且含历史工程副本 |
@@ -23,7 +23,7 @@
 2. `hardware_sim/README.md`，理解二进制输入与定点参数怎样生成。
 3. `user/src/README.md` 和 `user/src/snn_ff/README.md`，理解 RTL 层次。
 4. `user/src/axi_rw/README.md`，理解 PL 如何经 AXI HP0 访问 DDR。
-5. `user/sim/README.md`，先完成仿真，再按总指南进行 Vivado/Vitis 和上板验证。
+5. `user/sim/README.md` 和 `user/sim/iverilog/README.md`，先跑通两套 Icarus 回归，再按总指南进行 Vivado/Vitis 和上板验证。
 
 ## 归档边界
 

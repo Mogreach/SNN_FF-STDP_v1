@@ -72,14 +72,6 @@ module controller #(
     output reg            CTRL_SYNARRAY_CS,
     output reg            CTRL_SYNARRAY_WE,
 
-    output reg CTRL_SYNA_WR_EVENT,
-    output reg CTRL_SYNA_RD_EVENT,
-    output reg[WEIGHT_WIDTH-1:0] CTRL_SYNA_PROG_DATA,
-    
-    // Reserved programming outputs are held inactive by the AER-only FSM.
-    output reg            CTRL_WR_NEUR_EVENT,
-    output reg            CTRL_RD_NEUR_EVENT,
-    output reg [POST_NEUR_DATA_WIDTH-1:0]    CTRL_POST_NEUR_PROG_DATA,
     //控制器神经元地址
     output reg  [PRE_NEUR_ADDR_WIDTH-1:0]      CTRL_PRE_NEURON_ADDRESS,
     output reg  [POST_NEUR_ADDR_WIDTH-1:0]      CTRL_POST_NEURON_ADDRESS,//突触后神经元地址
@@ -294,17 +286,7 @@ module controller #(
     always @(*) begin
         case(state)
         TREF : begin
-            // sram关键控制信号
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
-            // To neuron
-            // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
-            // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 事件类型
             CTRL_NEUR_EVENT     = 1'b0;            
             CTRL_TSTEP_EVENT    = 1'b0;
@@ -367,16 +349,10 @@ module controller #(
             CTRL_PRE_NEUR_WE    = 1'b0;
             CTRL_POST_NEUR_CS   = 1'b0;
             CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 控制器神经元地址
             CTRL_PRE_NEURON_ADDRESS = 'd0;
             CTRL_POST_NEURON_ADDRESS = 'd0;
@@ -404,16 +380,10 @@ module controller #(
         NEUR_ACT : begin
             // To synaptic_core
             // sram关键控制信号
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 事件类型
             CTRL_TSTEP_EVENT    = 1'b0;
             CTRL_TREF_EVENT     = 1'b0;
@@ -456,15 +426,9 @@ module controller #(
             CTRL_SYNARRAY_CS    = 1'b0;
             CTRL_SYNARRAY_WE    = 1'b0;
             // sram关键控制信号
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 事件类型
             CTRL_TSTEP_EVENT    = 1'b0;
             CTRL_TREF_EVENT     = 1'b0;
@@ -507,16 +471,10 @@ module controller #(
             // sram关键控制信号
             CTRL_POST_NEUR_CS   = 1'b0;
             CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 事件类型
             CTRL_NEUR_EVENT     = 1'b0;
             CTRL_TREF_EVENT     = 1'b0;
@@ -561,16 +519,10 @@ module controller #(
             CTRL_PRE_NEUR_WE    = 1'b0;
             CTRL_POST_NEUR_CS   = 1'b0;
             CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 事件类型
             CTRL_NEUR_EVENT     = 1'b0;
             CTRL_TSTEP_EVENT    = 1'b0;
@@ -609,16 +561,10 @@ module controller #(
             CTRL_PRE_NEUR_WE    = 1'b0;
             CTRL_POST_NEUR_CS   = 1'b0;
             CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 事件类型
             CTRL_NEUR_EVENT     = 1'b0;
             CTRL_TSTEP_EVENT    = 1'b0;
@@ -656,16 +602,10 @@ module controller #(
             CTRL_PRE_NEUR_WE    = 1'b0;
             CTRL_POST_NEUR_CS   = 1'b0;
             CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 控制器神经元地址
             CTRL_PRE_NEURON_ADDRESS = 'd0;
             CTRL_POST_NEURON_ADDRESS = 'd0;
@@ -697,16 +637,10 @@ module controller #(
             CTRL_PRE_NEUR_WE    = 1'b0;
             CTRL_POST_NEUR_CS   = 1'b0;
             CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
             CTRL_PRE_CNT_EN     = 1'b0;
             // To neuron
             // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
             // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
             // 控制器神经元地址
             CTRL_PRE_NEURON_ADDRESS = 'd0;
             CTRL_POST_NEURON_ADDRESS = 'd0;

@@ -1,5 +1,6 @@
 TASK = "MNIST"
-NET_PATH = "./SNN-forwardforward/logs/analyze/MNIST_91.pth"
+# 相对仓库根目录；生成脚本需从仓库根目录运行，见 hardware_sim/README.md。
+NET_PATH = "./hardware_sim/MNIST_91.pth"
 
 POST_NEURONS = 256
 POST_PARALLEL = 8

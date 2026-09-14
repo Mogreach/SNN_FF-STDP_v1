@@ -27,12 +27,8 @@ module neuron_core #(
     // Synaptic inputs ----------------------------------------
     input  wire [SYN_ARRAY_DATA_WIDTH-1:0] SYNARRAY_RDATA,
     // Controller inputs ----------------------------------------
-    input wire  [POST_NEUR_DATA_WIDTH-1:0] CTRL_POST_NEUR_PROG_DATA,
-        //控制器突触地址
     input wire [PRE_NEUR_ADDR_WIDTH-1:0] CTRL_PRE_NEURON_ADDRESS,
     input wire [POST_NEUR_ADDR_WIDTH-1:0] CTRL_POST_NEURON_ADDRESS,
-    input wire       CTRL_WR_NEUR_EVENT,
-    input wire       CTRL_RD_NEUR_EVENT,
         //训练推理事件
     input wire  CTRL_NEUR_EVENT,
     input wire  CTRL_TSTEP_EVENT,
@@ -45,7 +41,6 @@ module neuron_core #(
     input wire  CTRL_PRE_CNT_EN,
 
     // Outputs
-    output reg [POST_NEUR_DATA_WIDTH-1:0] NEUR_STATE,
     output wire [POST_NEUR_PARALLEL-1:0] NEUR_EVENT_OUT,
     output wire [PRE_NEUR_DATA_WIDTH-1:0] PRE_NEUR_S_CNT,
     output wire [POST_NEUR_SPIKE_CNT_WIDTH * POST_NEUR_PARALLEL -1 :0] POST_NEUR_S_CNT
@@ -67,22 +62,11 @@ module neuron_core #(
     wire [POST_NEUR_DATA_WIDTH-1:0] post_neuron_sram_out_array [0:POST_NEUR_PARALLEL-1];
 
     wire [POST_NEUR_SRAM_ADDR_WIDTH - 1:0]  post_neuron_sram_addr;
-    wire [POST_NEUR_BYTE_ADDR_WIDTH-1:0]  post_neuron_byte_addr;
     wire [POST_NEUR_PARALLEL-1:0]  IF_neuron_event_out;
 
 
-    // assign NEUR_STATE = (post_neuron_sram_out >> ({5'b0,post_neuron_byte_addr} << 5))[31:0]; //右移post_neuron_byte_address * 32
     assign post_neuron_sram_addr = CTRL_POST_NEURON_ADDRESS[POST_NEUR_SRAM_ADDR_WIDTH + POST_NEUR_BYTE_ADDR_WIDTH - 1 : POST_NEUR_BYTE_ADDR_WIDTH];
-    assign post_neuron_byte_addr = CTRL_POST_NEURON_ADDRESS[POST_NEUR_BYTE_ADDR_WIDTH-1:0];
     assign PRE_NEUR_S_CNT = pre_neuron_sram_out;
-
-
-
-
-    always @(*) begin
-        NEUR_STATE = post_neuron_sram_out_array[post_neuron_byte_addr];
-    end
-
 
 
     // reg neur_event_d;
@@ -111,13 +95,10 @@ module neuron_core #(
             // 突触后神经元膜电位更新
             wire [POST_NEUR_MEM_WIDTH-1:0]  post_neuron_mem_next;
             // 突触后神经元阈值更新
-            // wire [POST_NEUR_MEM_WIDTH-1:0]  post_neuron_thresold_next = post_neuron_sram_out_array[i][POST_NEUR_MEM_WIDTH +: POST_NEUR_MEM_WIDTH];
-            wire [POST_NEUR_MEM_WIDTH-1:0]  post_neuron_thresold_next = neuron_thresold;
             // 突触后神经元发放脉冲更新
             wire [POST_NEUR_SPIKE_CNT_WIDTH-1:0]  post_neuron_spike_cnt_next;
             // 突触后神经元使能信号更新                 
             wire post_neuron_enable_next = 1'b1;
-            // assign post_neuron_sram_in_array[i] = {post_neuron_enable_next, post_neuron_spike_cnt_next, post_neuron_thresold_next, post_neuron_mem_next};
             assign post_neuron_sram_in_array[i] = {post_neuron_enable_next, post_neuron_spike_cnt_next, post_neuron_mem_next};
             assign post_neuron_sram_in[i*POST_NEUR_DATA_WIDTH +: POST_NEUR_DATA_WIDTH] = post_neuron_sram_in_array[i];
 
@@ -223,7 +204,6 @@ module neuron_core #(
 //    .wea   (CTRL_NEURMEM_WE       ),  // input 写使能信号
 //    .addra (CTRL_NEURMEM_ADDR     ), 
 //    .dina  (neuron_data  ),
-//    .douta (NEUR_STATE  )  
 //);
 
 endmodule

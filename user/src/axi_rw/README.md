@@ -22,6 +22,6 @@ DDR → AXI R 通道 → 32-bit 字节倒序 → 异步 `axi_input_fifo`（32→
 
 - `M_AXI_ACLK` 与 `SNN_CLK` 在当前 Block Design 中都接 FCLK0=100 MHz，异步 FIFO仍保留了跨时钟设计。
 - 源码通过 `PROCESS_DONE` 的下降沿进入写阶段，因此顶层 done 必须形成可采样脉冲。
-- `tb_axi4_rw_test_v1_0_M_AXI.sv` 是当前 AXI+SNN 验收入口；其 `SPIKE_DATA_FILE` 必须改成本机二进制数据的绝对路径。
+- `tb_axi4_rw_test_v1_0_M_AXI.sv` 是当前 AXI+SNN 验收入口；其 `SPIKE_DATA_FILE` 等四个文件参数必须改成本机绝对路径。TB 默认只跑 2 个训练条目，完整数据集参数属于外层实验配置，不代表 TB 默认行为。
 - 历史工程的综合网表存在，但仍应从当前源码做一次干净重建与回归，不能用旧网表替代源级验证。
-- 状态机 `IDLE` 直接依赖 `M_AXI_ARREADY`。读完成判断已改为最后一个 burst 的 `RVALID && RREADY && RLAST`，后续仍应在 xsim 中加入 backpressure 覆盖。
+- 状态机 `IDLE` 直接依赖 `M_AXI_ARREADY` 才进入 `READ_DATA`（当前 RTL 与参考基线一致）。读完成判断已改为最后一个 burst 的 `RVALID && RREADY && RLAST`，后续仍应在 xsim 中加入 backpressure 覆盖。

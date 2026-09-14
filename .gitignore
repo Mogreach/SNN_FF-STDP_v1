@@ -104,9 +104,7 @@ Release/
 _ide/
 /prj/snn_pl_axi_ddr/vitis/system_wrapper/
 /prj/snn_pl_axi_ddr/vitis/snn_test_system/
-# Icarus build directory: keep only its explanatory README.
-/user/sim/iverilog/build/*
-!/user/sim/iverilog/build/README.md
+# Icarus build directories: keep only the explanatory READMEs.
 /user/sim/iverilog/build_axi_test/*
 !/user/sim/iverilog/build_axi_test/README.md
 /user/sim/iverilog/build_core_test/*

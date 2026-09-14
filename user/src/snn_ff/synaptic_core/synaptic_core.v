@@ -31,10 +31,6 @@ module synaptic_core #(
     input wire CTRL_SYNARRAY_WE,
     input wire [SYN_ARRAY_ADDR_WIDTH-1:0] CTRL_SYNARRAY_ADDR,
     input wire [POST_NEUR_ADDR_WIDTH-1:0]  CTRL_POST_NEURON_ADDRESS,
-
-    input wire CTRL_SYNA_WR_EVENT,
-    input wire CTRL_SYNA_RD_EVENT,
-    input wire[WEIGHT_WIDTH-1:0] CTRL_SYNA_PROG_DATA,
     
     input wire  CTRL_NEUR_EVENT,
     input wire  CTRL_TSTEP_EVENT,
@@ -48,7 +44,6 @@ module synaptic_core #(
     localparam SYN_SRAM_DATA_WIDTH = POST_NEUR_PARALLEL * WEIGHT_WIDTH; 
     // Internal regs and wires definitions
     wire [SYN_ARRAY_ADDR_WIDTH-1:0]    synarray_addr;
-    wire [POST_NEUR_BYTE_ADDR_WIDTH-1:0]     post_neuron_byte_addr;
 
     wire [SYN_SRAM_DATA_WIDTH-1:0] synarray_wdata;
     wire [WEIGHT_WIDTH-1:0] weight_orignal_array[0:POST_NEUR_PARALLEL-1];
@@ -57,8 +52,6 @@ module synaptic_core #(
     wire [POST_NEUR_SPIKE_CNT_WIDTH-1:0]  POST_NEUR_S_CNT_array[0:POST_NEUR_PARALLEL-1];
 
     assign synarray_addr = CTRL_SYNARRAY_ADDR;
-    // assign post_neuron_byte_addr = CTRL_POST_NEURON_ADDRESS[POST_NEUR_BYTE_ADDR_WIDTH-1:0];
-
 
     genvar i;
     // SDSP update logic
@@ -110,7 +103,17 @@ module synaptic_core #(
         .D  (synarray_wdata),
         .Q  (SYNARRAY_RDATA)
     );
-
+    // FPGA RAM IP (Single port)
+    // Synaptic memory wrapper
+    //     sram_synaptic u_sram_synaptic(
+    //     .clka                                  (CLK                ),// input wire clka
+    //     .ena                                   (CTRL_SYNARRAY_CS   ),// input 片选使能信号
+    //     .wea                                   (CTRL_SYNARRAY_WE   ),// input 写使能信号
+    //     .addra                                 (synarray_addr      ),
+    //     .dina                                  (synarray_wdata     ),
+    //     .douta                                 (SYNARRAY_RDATA     ) 
+    // );
+    
 // FPGA BRAM 原生模式	最大深度	宽度
 // RAMB36	1024	36 bits
 // RAMB18	2048	18 bits

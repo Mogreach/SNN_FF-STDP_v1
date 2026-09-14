@@ -5,15 +5,15 @@
 ## 层次结构
 
 - `Top_test.v`：当前单层 784→256 板级/集成仿真顶层；为输出 AER 生成延迟 ack，并把单核完成信号导出为 `PROCESS_DONE`。
-- `Top_test_1.v`：最多 8 层的参数化生成版本，依赖 `Top_test_cfg.vh`；属于可扩展变体。
-- `Top_784-512-512.v`：固定网络的历史副本，模块名同样是 `Top_test`，不可与当前文件同时编译。
 - `ODIN_ffstdp.v`：单层核心，组合 controller、scheduler、神经元、突触、SRAM、AER 输出与梯度 ROM。
 - `controller.v`：核心内部 9 状态 one-hot 控制器。
 - `scheduler.v`：外部输入事件、内部神经元事件和时间事件的 FIFO 调度。
-- `aer_in_lrf_mapper.sv`：层间 AER 地址/事件映射。
-- `aer_core_event_arbiter.sv`：多个核心输出仲裁。
-- `goodness_moving_avg.v`：各核 goodness 的指数移动平均模块；当前 `Top_test` 未实例化它，并把预留的 `AVG_GOODNESS` 显式接零。
-- `spi_slave.v`：参数/存储器访问的 SPI 辅助路径。
+- `aer_out/`：`aer_outs.v` 汇总并行 lane 的发放并累计 goodness，`adder_tree.v` 为其配套加法树。
+- `neuron_core/`：`pre_neuron.v`、`if_neuron.v` 与 `neuron_core.v`。
+- `synaptic_core/`：`synaptic_core.v` 与在线更新 `ffstdp_update.v`。
+- `sram/`、`rom/`、`fifo/`：存储器封装、梯度查找表与行为 FIFO。
+
+> 早期笔记提到的多层变体 `Top_test_1.v`、`Top_784-512-512.v`、`aer_in_lrf_mapper.sv`、`aer_core_event_arbiter.sv`，以及 `goodness_moving_avg.v`，**均不在当前归档中**。`Top_test` 把预留的 `AVG_GOODNESS` 显式接零；SPI 通路（原 `spi_slave.v` 及 controller/synaptic_core/neuron_core 中的编程端口）已在整理中删除，当前核只走 AER 输入。
 
 ## AER 编码
 
@@ -27,4 +27,6 @@ AER 地址最高两位是事件类型：`00` 神经元脉冲，`01` 时间步事
 
 ## 当前源级校验状态
 
-当前单层 `Top_test` 已通过 Icarus Verilog 11 的完整层次展开。恢复版 `if_neuron` 的上层参数/端口已重新对齐，AER lane 地址已定宽，20-bit 后神经元状态按 `{enable[1], spike_count[6], membrane[13]}` 拼接。系统级功能回归仍应使用 Vivado/xsim 的 `axi_input_fifo` IP 行为模型完成。
+当前单层 `Top_test` 已通过 Icarus Verilog 11 的完整层次展开。恢复版 `if_neuron` 的上层参数/端口已重新对齐，AER lane 地址已定宽，20-bit 后神经元状态按 `{enable[1], spike_count[6], membrane[13]}` 拼接。
+
+Icarus 环境用 `user/sim/iverilog/axi_input_fifo_model.sv` 行为模型替代 Vivado 的 `axi_input_fifo` IP 模型，因此 `tb_core_test.sv` 和 `tb_axi4_rw_test_v1_0_M_AXI.sv` 都能在 Icarus 下直接回归；见 `user/sim/iverilog/README.md`。Vivado/xsim 工程回归仍应使用工程生成的 IP 模型。

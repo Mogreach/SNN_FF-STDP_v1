@@ -13,13 +13,15 @@
 
 ## 使用前提
 
-这些脚本依赖外部 `SNN-forwardforward` 工程及 PyTorch、torchvision、NumPy、Brian2、Matplotlib/Seaborn。源码中仍保留 Windows 绝对 `sys.path`，且模型路径是仓库外相对路径；迁移机器后先修改这两处。建议从仓库根目录运行，以便 `Gen_out/<TASK>` 路径正确。
+这些脚本依赖外部 `SNN-forwardforward` 工程及 PyTorch、torchvision、NumPy、Brian2、Matplotlib/Seaborn。`gen_data_flow.py` 与 `gen_model_weight_coe.py` 顶部仍保留 Windows 绝对 `sys.path.append('D:/OneDrive/...')`；迁移机器后必须先改成当前软件模型路径，或用 `PYTHONPATH` 提供。脚本按仓库根目录为工作目录运行，输出写入 `./Gen_out/<TASK>/`。
+
+`NET_PATH`（在 `hardware_sim_config.py`）是相对仓库根目录的模型 checkpoint 路径，当前指向仓库内的 `./hardware_sim/MNIST_91.pth`。改成仓库外 checkpoint 时沿用同样的“相对根目录”写法。
 
 ## 当前注意事项
 
 - 配置文件与当前 `Top_test` 都是 784→256、T=8、后神经元并行度 8、权重 9 bit。
 - `gen_model_weight_coe.py` 只处理遍历到的第一层，并在源码中标记 COE 对齐问题。
-- `gen_sigmoid.py` 生成 RTL 的输出路径仍写成 `./hardware/src/...`，本仓库实际路径为 `./user/src/...`。
+- `gen_sigmoid.py` 生成 ROM RTL 时写的是 `./hardware/src/snn_ff/rom/...`，本仓库实际路径为 `./user/src/snn_ff/rom/...`。该路径在重跑前需修正，否则只使用它同时导出的 `Gen_out/<TASK>/*.coe`。
 - `gen_data_flow.py` 的样本上限和 RTL/Vitis 宏应人工对齐，生成后用文件大小公式复核。
 
 因此这些脚本属于可复现基础和历史工作流，而不是当前可一键运行的流水线。
