@@ -1,0 +1,118 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Simulation outputs and waveform databases
+*.vcd
+*.fst
+*.lxt
+*.lxt2
+*.wdb
+*.wcfg
+*.vvp
+*.ghw
+*.fsdb
+*.shm
+xsim.dir/
+work/
+transcript
+
+# Logs, journals and temporary reports
+*.log
+*.jou
+*.str
+*.tmp
+*.bak
+*.backup
+*.pid
+*.zip
+.analytics
+
+# Generated datasets, model exports and memory images
+*.bin
+*.npy
+*.npz
+*.pt
+*.pth
+*.onnx
+*.mif
+*.mem
+*.coe
+/Gen_out/**
+!/Gen_out/
+!/Gen_out/README.md
+!/Gen_out/MNIST/
+!/Gen_out/MNIST/README.md
+!/Gen_out/FashionMNIST/
+!/Gen_out/FashionMNIST/README.md
+!/Gen_out/Saif/
+!/Gen_out/Saif/README.md
+test_labels.h
+
+# Local documentation attachments/screenshots
+/assets/
+/prj/
+# Synthesis, implementation and power-analysis products
+*.bit
+*.ltx
+*.dcp
+*.edf
+*.edn
+*.ngc
+*.ngd
+*.ncd
+*.sdf
+*.saif
+*.xsa
+*.hdf
+*.rpt
+*.rpx
+*.util
+
+# Compiled software products
+*.o
+*.d
+*.a
+*.so
+*.dll
+*.exe
+*.elf
+*.map
+*.size
+
+# Vivado generated directories. The maintained RTL/Tcl/XDC lives under user/.
+.Xil/
+*.cache/
+*.gen/
+*.hw/
+*.ioplanning/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.srcs/
+
+# Vitis/Eclipse workspace and generated platform output
+.metadata/
+RemoteSystemsTempFiles/
+Packages/
+Debug/
+Release/
+_ide/
+/prj/snn_pl_axi_ddr/vitis/system_wrapper/
+/prj/snn_pl_axi_ddr/vitis/snn_test_system/
+# Icarus build directory: keep only its explanatory README.
+/user/sim/iverilog/build/*
+!/user/sim/iverilog/build/README.md
+
+# Editor and OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
