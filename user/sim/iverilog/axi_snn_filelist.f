@@ -1,3 +1,4 @@
++define+SNN_RAM_SIM
 ../../../user/src/axi_rw/parallel_to_serial.v
 ../../../user/src/axi_rw/axi4_rw_test_v1_0_M_AXI.v
 ../../../user/src/axi_rw/axi4_rw_test_v1_0.v

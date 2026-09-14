@@ -1,3 +1,7 @@
+// 仿真用行为模型。FPGA 构建由工程中的 blk_mem_gen IP "sram_synaptic" 提供，
+// 二者模块名相同，因此本文件整体只在定义了 SNN_RAM_SIM 时参与编译，
+// 避免把整个 user/src 加入 Vivado 时产生重复定义。
+`ifdef SNN_RAM_SIM
 module sram_synaptic #(
     parameter  ADDR_WIDTH = 8,
     parameter  DATA_WIDTH = 32,
@@ -33,3 +37,4 @@ module sram_synaptic #(
 
 
 endmodule
+`endif

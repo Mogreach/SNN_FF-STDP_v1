@@ -74,7 +74,9 @@ def gen_test_label(test_pics,test_label):
     #endif // TEST_LABELS_H
     """
     # 写入文本文件
-    with open(f"./Gen_out/{TASK}/test_labels.h", "w") as f:
+    out_dir = GEN_OUT_ROOT / TASK
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with open(out_dir / "test_labels.h", "w") as f:
         f.write(c_code)
     print("C header file 'test_labels.h' generated successfully!")
 def gen_dataset_spike(train_pics,test_pics,T):
@@ -222,7 +224,7 @@ def gen_dataset_spike(train_pics,test_pics,T):
     all_spikes = np.array(all_spikes).astype(int)  # 形状为 (2 * train_pics, 16, 784)
 
     # 保存为单个二进制文件
-    save_spike_data(all_spikes, f"./Gen_out/{TASK}/all_spikes.bin")
+    save_spike_data(all_spikes, str(GEN_OUT_ROOT / TASK / "all_spikes.bin"))
     print("Saved all spike data to binary files")
 
 

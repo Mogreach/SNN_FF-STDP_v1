@@ -88,9 +88,15 @@ module synaptic_core #(
     endgenerate
     
     
-    // The original design used a Vivado BRAM IP with clka/ena/wea ports.
-    // Icarus uses the behavioral equivalent with the same synchronous
-    // read-before-write behavior and the original memory geometry.
+    // 突触权重存储器
+    //   SNN_RAM_SIM 已定义 -> 行为模型（Icarus 仿真流程）
+    //   未定义（默认）     -> Vivado blk_mem_gen IP "sram_synaptic"
+    //
+    // 同一时刻只能有一个 sram_synaptic 模块定义参与编译：
+    //   sim : filelist 收入 user/src/snn_ff/sram/sram_synaptic.v
+    //   fpga: 由工程中的 sram_synaptic IP 提供
+    // 实例名两种模式下都必须保持 u_sram_synaptic，testbench 依赖该层次路径。
+`ifdef SNN_RAM_SIM
     sram_synaptic #(
         .ADDR_WIDTH (SYN_ARRAY_ADDR_WIDTH),
         .DATA_WIDTH (SYN_SRAM_DATA_WIDTH),
@@ -103,53 +109,20 @@ module synaptic_core #(
         .D  (synarray_wdata),
         .Q  (SYNARRAY_RDATA)
     );
-    // FPGA RAM IP (Single port)
-    // Synaptic memory wrapper
-    //     sram_synaptic u_sram_synaptic(
-    //     .clka                                  (CLK                ),// input wire clka
-    //     .ena                                   (CTRL_SYNARRAY_CS   ),// input 片选使能信号
-    //     .wea                                   (CTRL_SYNARRAY_WE   ),// input 写使能信号
-    //     .addra                                 (synarray_addr      ),
-    //     .dina                                  (synarray_wdata     ),
-    //     .douta                                 (SYNARRAY_RDATA     ) 
-    // );
-    
-// FPGA BRAM 原生模式	最大深度	宽度
-// RAMB36	1024	36 bits
-// RAMB18	2048	18 bits
-
-// sram_synaptic_bank#(
-//    .DATA_WIDTH     (SYN_SRAM_DATA_WIDTH),
-//    .TOTAL_DEPTH    (INPUT_NEURON * OUTPUT_NEURON / POST_NEUR_PARALLEL),
-//    .BLOCK_DEPTH    (2048           )
-// )
-//  u_sram_synaptic_bank(
-//     // Global inputs
-//     .CK                                    (CLK                ),// Clock (synchronous read/write)
-//     // Control and data inputs
-//     .CS                                    (CTRL_SYNARRAY_CS   ),// Chip select
-//     .WE                                    (CTRL_SYNARRAY_WE   ),// Write enable
-//     .A                                     (synarray_addr      ),// Address bus
-//     .D                                     (synarray_wdata     ),// Data input bus (write)
-//     // Data output
-//     .Q                                     (SYNARRAY_RDATA     ) // Data output bus (read)
-// );
-// sram_synaptic#(
-//     .DATA_WIDTH                            (SYN_SRAM_DATA_WIDTH),
-//     .ADDR_WIDTH                            (SYN_ARRAY_ADDR_WIDTH),
-//     .SRAM_DEPTH                            (INPUT_NEURON * OUTPUT_NEURON / POST_NEUR_PARALLEL) 
-// )
-//  u_sram_synaptic_bank(
-//     // Global inputs
-//     .CK                                    (CLK                ),// Clock (synchronous read/write)
-//     // Control and data inputs
-//     .CS                                    (CTRL_SYNARRAY_CS   ),// Chip select
-//     .WE                                    (CTRL_SYNARRAY_WE   ),// Write enable
-//     .A                                     (synarray_addr      ),// Address bus
-//     .D                                     (synarray_wdata     ),// Data input bus (write)
-//     // Data output
-//     .Q                                     (SYNARRAY_RDATA     ) // Data output bus (read)
-// );
+`else
+    // IP 固定几何：72bit x 25088 单口 BRAM，addra[14:0]
+    //   72    = POST_NEUR_PARALLEL * WEIGHT_WIDTH
+    //   25088 = INPUT_NEURON * OUTPUT_NEURON / POST_NEUR_PARALLEL
+    // 这两个值变化时必须重新生成 IP。
+    sram_synaptic u_sram_synaptic (
+        .clka  (CLK),
+        .ena   (CTRL_SYNARRAY_CS),
+        .wea   (CTRL_SYNARRAY_WE),
+        .addra (synarray_addr),
+        .dina  (synarray_wdata),
+        .douta (SYNARRAY_RDATA)
+    );
+`endif
 
 endmodule
 

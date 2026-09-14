@@ -1,3 +1,4 @@
++define+SNN_RAM_SIM
 ../../../user/src/snn_ff/aer_out/adder_tree.v
 ../../../user/src/snn_ff/aer_out/aer_outs.v
 ../../../user/src/snn_ff/fifo/fifo.v

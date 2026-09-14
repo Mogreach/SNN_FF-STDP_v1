@@ -13,15 +13,17 @@
 
 ## 使用前提
 
-这些脚本依赖外部 `SNN-forwardforward` 工程及 PyTorch、torchvision、NumPy、Brian2、Matplotlib/Seaborn。`gen_data_flow.py` 与 `gen_model_weight_coe.py` 顶部仍保留 Windows 绝对 `sys.path.append('D:/OneDrive/...')`；迁移机器后必须先改成当前软件模型路径，或用 `PYTHONPATH` 提供。脚本按仓库根目录为工作目录运行，输出写入 `./Gen_out/<TASK>/`。
+这些脚本依赖外部 `SNN-forwardforward` 工程及 PyTorch、torchvision、NumPy、Brian2、Matplotlib/Seaborn。`gen_data_flow.py` 与 `gen_model_weight_coe.py` 顶部仍有 `sys.path.append('D:/OneDrive/SNN_FFSTDP/SNN-forwardforward')`——**这是仓库外软件工程的路径，换机器后需要改成实际位置或用 `PYTHONPATH` 提供**，本轮未改动。
 
-`NET_PATH`（在 `hardware_sim_config.py`）是相对仓库根目录的模型 checkpoint 路径，当前指向仓库内的 `./hardware_sim/MNIST_91.pth`。改成仓库外 checkpoint 时沿用同样的“相对根目录”写法。
+除上述外部依赖外，脚本自身路径已以 `hardware_sim_config.py` 里的 `REPO_ROOT`（由 `__file__` 推出）为锚点，因此**从任何目录运行都会写到同一个 `Gen_out/<TASK>/`**，不需要先 `cd` 到仓库根。`NET_PATH` 同样锚定到仓库内的 `hardware_sim/MNIST_91.pth`，换成仓库外 checkpoint 时改这一个常量即可；`USER_SRC_ROOT` 供 `gen_sigmoid.py` 写 ROM RTL。
+
+注意：`gen_*` 脚本会直接覆盖 `Gen_out/<TASK>/` 下的同名产物。重跑前先确认当前数据是否还需要保留。
 
 ## 当前注意事项
 
 - 配置文件与当前 `Top_test` 都是 784→256、T=8、后神经元并行度 8、权重 9 bit。
 - `gen_model_weight_coe.py` 只处理遍历到的第一层，并在源码中标记 COE 对齐问题。
-- `gen_sigmoid.py` 生成 ROM RTL 时写的是 `./hardware/src/snn_ff/rom/...`，本仓库实际路径为 `./user/src/snn_ff/rom/...`。该路径在重跑前需修正，否则只使用它同时导出的 `Gen_out/<TASK>/*.coe`。
+- `gen_sigmoid.py` 生成 ROM RTL 时直接写到 `user/src/snn_ff/rom/`（已锚定），重跑会覆盖 `pos_derivative_rom.v`/`neg_derivative_rom.v`，改动前先确认是否要保留当前版本。
 - `gen_data_flow.py` 的样本上限和 RTL/Vitis 宏应人工对齐，生成后用文件大小公式复核。
 
 因此这些脚本属于可复现基础和历史工作流，而不是当前可一键运行的流水线。

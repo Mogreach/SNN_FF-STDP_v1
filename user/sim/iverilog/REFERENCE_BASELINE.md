@@ -6,10 +6,11 @@
 
 ## 为适配 Icarus core/AXI test 保留的差异
 
-- `synaptic_core.v` 把参考版依赖的 Vivado BRAM-IP 端口连接改为同读写时序的行为 `sram_synaptic` 模型。
+- `synaptic_core.v` 在实例化点用 `SNN_RAM_SIM` 宏选择突触权重存储：仿真走行为 `sram_synaptic` 模型，FPGA 走参考版依赖的 Vivado BRAM IP。
 - `aer_outs.v` 为 `genvar` 地址偏移引入定宽中间信号 `LANE_OFFSET`/`lane_neuron_addr`，消除 Icarus 的“不定宽拼接”编译错误。
 - 补充 `CTRL_TSTEP_EVENT_negedge`、`ctrl_state` 的显式声明，消除隐式网络。
-- 存储器初值不再由 SRAM 模块内的 `$readmem*` 绝对路径加载，而是集中到 testbench 中按 DUT 层次写入（见 `tb_core_test.sv`、`tb_axi4_rw_test_v1_0_M_AXI.sv`）。SRAM 模块只保留端口和读写行为。
+- 突触权重存储器由 `SNN_RAM_SIM` 宏二选一：仿真模式用行为 `sram_synaptic.v`，FPGA 模式用工程里的 `sram_synaptic` IP。细节见 `user/src/snn_ff/sram/README.md`。
+- 神经元状态初值：仿真模式由 testbench 按 DUT 层次 `$readmemh` 写入（见 `tb_core_test.sv`、`tb_axi4_rw_test_v1_0_M_AXI.sv`）；FPGA 模式改为 SRAM 模块内可综合的 `initial $readmemh`，路径由 `SNN_PRE_NEUR_STATE_FILE`/`SNN_POST_NEUR_STATE_FILE` 在综合时传入。
 
 ## 相对基准的主动清理
 

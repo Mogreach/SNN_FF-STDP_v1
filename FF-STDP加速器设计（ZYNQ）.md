@@ -44,7 +44,8 @@
 - Vitis 程序写结果读取基址仍定义为 `0x0B00_0000`，与当前 AXI 封装写基址 `0x12D1_2800` 不一致。上板前必须选定一个地址并两端同步。
 - 已有历史综合网表不等于当前源码可以干净重建；重新综合前仍需对当前 file set 做一次从零编译和回归。
 - `gen_model_weight_coe.py` 当前只导出首层，适合现行单层顶层；若将来扩展为多层，需要改为逐层导出并解决源码标注的 COE 行对齐问题。当前归档中已无多层顶层文件。
-- `gen_sigmoid.py` 生成 ROM RTL 时写入的是不存在的 `hardware/src/...`，应改为 `user/src/snn_ff/rom/...` 或只使用它同时导出的 COE。
+- `gen_sigmoid.py` 已改为把 ROM RTL 写到 `user/src/snn_ff/rom/`（仓库锚定路径），重跑会覆盖现有 ROM 源码。
+- 生成脚本的仓库内路径已用 `hardware_sim_config.py` 的 `REPO_ROOT` 锚定，不再依赖工作目录；但脚本顶部的 `sys.path.append('D:/OneDrive/...')` 仍指向仓库外的软件工程，换机器需改。
 - `system.tcl` 是历史导出脚本，脚本开头临时建工程使用 `xc7z010clg400-1`，而主工程/当前 BD 是 Z-7030。应在 Z-7030 工程中复用 BD 内容，不能盲目执行默认建工程分支。
 - 当前单层 `Top_test` 已通过 Icarus Verilog 11 干净展开；Icarus 环境用 `user/sim/iverilog/axi_input_fifo_model.sv` 行为模型替代 FIFO Generator IP，两套 TB 均可在 Icarus 下回归，xsim 工程回归仍应使用 Vivado 生成的行为模型。
 
@@ -467,6 +468,8 @@ cd user/sim/iverilog
 
 Icarus 环境用 `axi_input_fifo_model.sv` 行为模型替代 Vivado 的 `axi_input_fifo` IP。若在 xsim 中跑系统级 testbench，应改用工程生成的行为模型，否则只能完成 RTL 展开检查。
 
+两个 filelist 顶部都定义了 `SNN_RAM_SIM`，把突触权重存储切到行为模型。**FPGA 构建不定义该宏**，此时 `synaptic_core.v` 实例化工程里的 `sram_synaptic` BRAM IP，且神经元状态改由 SRAM 模块内可综合的 `initial $readmemh` 初始化，路径必须在综合时通过 `SNN_PRE_NEUR_STATE_FILE`/`SNN_POST_NEUR_STATE_FILE` 传入（不传则综合报错）。完整说明见 `user/src/snn_ff/sram/README.md`。
+
 ### 9.3 Vivado/xsim 系统 testbench 数据路径
 
 `tb_axi4_rw_test_v1_0_M_AXI.sv` 使用 `$fopen(SPIKE_DATA_FILE, "rb")` 和 `$fread` 直接读取生成的原始 `all_spikes.bin`，不是 `$readmemh` 文本。Vivado 仿真会把工作目录切换到工程生成的 run 目录，因此这里有意使用绝对路径。每次换机器、移动仓库或切换 MNIST/FashionMNIST 时，必须修改 testbench 文件顶部的四个路径参数：
@@ -514,9 +517,20 @@ parameter PRE_NEURON_STATE_FILE  = "/本机绝对路径/Gen_out/MNIST/pre_neuron
 2. Sources 中只存在一个 `Top_test` 模块定义；排除同名历史文件。
 3. module reference 指向 `user/src` 当前源码，而非失效的 Windows 绝对路径。
 4. `axi_input_fifo`、突触 SRAM/BRAM IP 均未 locked，输出产品齐全。
-5. Block Design 选择 `design_7030`，Validate Design 通过。
-6. 地址映射包含 PL master 到 HP0 的 512 MiB segment。
-7. XDC 与目标板卡和顶层端口匹配。
+5. **不要**把 `user/src/snn_ff/sram/sram_synaptic.v`（仿真行为模型）加入 file set——它与 `sram_synaptic` BRAM IP 同名。该文件已用 `` `ifdef SNN_RAM_SIM `` 整体包住，误加也不会重复定义，但仍应从 file set 中排除。
+6. 未定义 `SNN_RAM_SIM`（不要为综合设置它）。
+7. 在 Synthesis 的 Verilog Define 中设置两个初值路径宏，否则综合会直接报错：
+
+   ```tcl
+   set_property verilog_define {
+     SNN_PRE_NEUR_STATE_FILE="<abs>/Gen_out/MNIST/pre_neuron_state.txt"
+     SNN_POST_NEUR_STATE_FILE="<abs>/Gen_out/MNIST/post_neuron_state.txt" } \
+     [get_filesets sources_1]
+   ```
+
+8. Block Design 选择 `design_7030`，Validate Design 通过。
+9. 地址映射包含 PL master 到 HP0 的 512 MiB segment。
+10. XDC 与目标板卡和顶层端口匹配。
 
 ### 10.2 从脚本重建 Block Design
 
@@ -687,7 +701,7 @@ SD 加载完成不自动启动 PL；用户仍需按 `key_train_enable` 选择是
 6. 让 SD 程序不自动格式化、处理非 4-byte 末块、检查文件大小和 DDR 上界。
 7. 把按键启动替换为 PS 可控寄存器，并加入 busy/done/error/IRQ；保留按键作为调试旁路。
 8. 增加权重打包/解包 round-trip 单元测试；`gen_model_weight_coe.py` 目前只导出首层，与现行单层网络一致。
-9. 清理脚本中的失效 Windows 路径（`gen_data_flow.py`/`gen_model_weight_coe.py` 的 `sys.path`、`gen_sigmoid.py` 的 ROM 输出路径），提供可重建 Vivado Tcl 与 Vitis workspace 创建说明；系统 TB 的数据绝对路径保留为显式本机配置项。
+9. 清理脚本中的失效 Windows 路径（剩余 `gen_data_flow.py`/`gen_model_weight_coe.py` 顶部指向仓库外软件工程的 `sys.path`），提供可重建 Vivado Tcl 与 Vitis workspace 创建说明；系统 TB 的数据绝对路径保留为显式本机配置项。
 10. 把系统 testbench 改为自检式，并在小数据集上比较软件与 RTL 每条 goodness。
 11. 最后再做并行度、关键路径、BRAM bank 和功耗优化。
 
@@ -725,6 +739,7 @@ SD 加载完成不自动启动 PL；用户仍需按 `key_train_enable` 选择是
 | 权重导出 | `hardware_sim/gen_model_weight_coe.py` |
 | 梯度 ROM | `hardware_sim/gen_sigmoid.py` |
 | 板级约束 | `user/data/axi4_ddr_rw.xdc` |
+| 存储器 FPGA/仿真双模式 | `user/src/snn_ff/sram/README.md` |
 | Icarus 回归入口 | `user/sim/iverilog/README.md` |
 | core / AXI testbench | `user/sim/tb_core_test.sv`、`user/sim/tb_axi4_rw_test_v1_0_M_AXI.sv` |
 

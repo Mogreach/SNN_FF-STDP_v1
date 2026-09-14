@@ -102,15 +102,15 @@ def save_txt_file(packed_data, filename="weights.txt"):
         for i, hex_str in enumerate(packed_data):
             f.write(f"{hex_str}\n")  #
 if __name__ == "__main__":
-    out_dir = "Gen_out/" + TASK
-    os.makedirs(out_dir, exist_ok=True)
-    
+    out_dir = GEN_OUT_ROOT / TASK
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     vth = int(V_THRESHOLD_POS / WEIGHT_SCALE)
     post_state = pack_post_state_to_hex(enable=1, spike_cnt=0, v_th=vth, v_mem=0, depth = POST_SRAM_DEPTH, pack_bits=POST_SRAM_DATA_WIDTH)
     pre_state = pack_pre_state_to_hex(spike_cnt=0, depth = PRE_SRAM_DEPTH, pack_bits=PRE_SRAM_DATA_WIDTH)
 
-    save_txt_file(post_state, filename=f"./{out_dir}/post_neuron_state.txt")
-    save_txt_file(pre_state, filename=f"./{out_dir}/pre_neuron_state.txt")
+    save_txt_file(post_state, filename=str(out_dir / "post_neuron_state.txt"))
+    save_txt_file(pre_state, filename=str(out_dir / "pre_neuron_state.txt"))
 
     print("TXT 文件已生成！")
     

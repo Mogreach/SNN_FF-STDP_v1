@@ -25,4 +25,6 @@ RTL 验证入口。测试粒度从模块级到整机数据通路逐级增加。�
 
 `axi_input_fifo` 在 Vivado 中由 FIFO Generator IP 提供；Icarus 环境改用 `iverilog/axi_input_fifo_model.sv` 行为模型，因此两套 TB 都能在 Icarus 下直接回归。工程内回归仍应使用 Vivado 生成的 IP 模型。
 
+两个 filelist 顶部都带一行 `+define+SNN_RAM_SIM`，用于把突触权重存储切到行为模型。FPGA 构建不定义该宏，走工程里的 BRAM IP；神经元初值也随之改由综合时传入的 `SNN_PRE_NEUR_STATE_FILE`/`SNN_POST_NEUR_STATE_FILE` 提供。详见 `user/src/snn_ff/sram/README.md`。
+
 详细命令、产物位置和最近一次回归结果见 `iverilog/README.md` 与 `iverilog/REFERENCE_BASELINE.md`。

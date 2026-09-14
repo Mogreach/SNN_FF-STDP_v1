@@ -295,7 +295,9 @@ def save_image(img, title, save_path, cmap='magma'):
     plt.savefig(save_path, dpi=300)
     plt.close()
 
-def visualize_pos_neg_sample(test_dataset, save_dir="./vis", idx=0):
+def visualize_pos_neg_sample(test_dataset, save_dir=None, idx=0):
+    if save_dir is None:
+        save_dir = str(REPO_ROOT / "Gen_out" / "vis")
     os.makedirs(save_dir, exist_ok=True)
 
     # --- 取一张测试样本 ---
@@ -376,7 +378,7 @@ def main():
     device = torch.device("cuda")
     net = Net(dims=[784,256, 10],tau=args.tau, epoch=args.epochs, T=8, lr=args.lr,
               v_threshold_pos=1.3,v_threshold_neg=-1.2, opt=args.opt, loss_threshold=0.5)
-    net.load("./SNN-forwardforward/logs/analyze/MNIST_91.pth")
+    net.load(NET_PATH)
     with torch.no_grad():
         for layer_idx, layer in enumerate(net.layers):
                 # 遍历命名子模块，找到真正的可学习层（你模型中 name=="layer" 的模块）

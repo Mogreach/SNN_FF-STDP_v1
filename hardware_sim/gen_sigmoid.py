@@ -102,8 +102,9 @@ def generate_rom_verilog_reg(file_name, module_name, data_list, data_width):
 # 主流程
 ##################################
 if __name__ == '__main__':
-    out_dir = "Gen_out" + "/" + TASK
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir = GEN_OUT_ROOT / TASK
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rom_dir = USER_SRC_ROOT / "snn_ff" / "rom"
     theta = THETA
     lr = 0.015625 / 8
 
@@ -137,8 +138,9 @@ if __name__ == '__main__':
     neg_delta_int_list = quantize_tensor_int(neg_delta_list, WEIGHT_MAX, num_bits=WEIGHT_WIDTH)
     rom_vis(_, pos_delta_int_list, neg_delta_int_list)
     # 🔥 生成 Verilog ROM
-    generate_rom_verilog_reg("./hardware/src/snn_ff/rom/pos_derivative_rom.v", "pos_derivative_rom", pos_delta_int_list, WEIGHT_WIDTH)
-    generate_rom_verilog_reg("./hardware/src/snn_ff/rom/neg_derivative_rom.v", "neg_derivative_rom", neg_delta_int_list, WEIGHT_WIDTH)
+    rom_dir.mkdir(parents=True, exist_ok=True)
+    generate_rom_verilog_reg(str(rom_dir / "pos_derivative_rom.v"), "pos_derivative_rom", pos_delta_int_list, WEIGHT_WIDTH)
+    generate_rom_verilog_reg(str(rom_dir / "neg_derivative_rom.v"), "neg_derivative_rom", neg_delta_int_list, WEIGHT_WIDTH)
 
-    write_coe(f"./{out_dir}/pos_derivative.coe",pos_delta_int_list, num_bits=WEIGHT_WIDTH, max_val=WEIGHT_MAX) 
-    write_coe(f"./{out_dir}/neg_derivative.coe",neg_delta_int_list, num_bits=WEIGHT_WIDTH, max_val=WEIGHT_MAX)
+    write_coe(str(out_dir / "pos_derivative.coe"), pos_delta_int_list, num_bits=WEIGHT_WIDTH, max_val=WEIGHT_MAX)
+    write_coe(str(out_dir / "neg_derivative.coe"), neg_delta_int_list, num_bits=WEIGHT_WIDTH, max_val=WEIGHT_MAX)

@@ -1,6 +1,13 @@
+from pathlib import Path
+
+# 以本文件为锚点定位仓库，脚本不再依赖当前工作目录。
+REPO_ROOT = Path(__file__).resolve().parent.parent
+GEN_OUT_ROOT = REPO_ROOT / "Gen_out"
+USER_SRC_ROOT = REPO_ROOT / "user" / "src"
+
 TASK = "MNIST"
-# 相对仓库根目录；生成脚本需从仓库根目录运行，见 hardware_sim/README.md。
-NET_PATH = "./hardware_sim/MNIST_91.pth"
+# 模型 checkpoint；仓库内文件，换外部模型时改这里或覆盖本常量。
+NET_PATH = str(REPO_ROOT / "hardware_sim" / "MNIST_91.pth")
 
 POST_NEURONS = 256
 POST_PARALLEL = 8

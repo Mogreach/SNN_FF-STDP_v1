@@ -155,8 +155,8 @@ def save_txt_file(packed_data, filename="weights.txt"):
         for i, hex_str in enumerate(packed_data):
             f.write(f"{hex_str}\n")  #
 if __name__ == "__main__":
-    out_dir = "Gen_out/" + TASK
-    os.makedirs(out_dir, exist_ok=True)
+    out_dir = GEN_OUT_ROOT / TASK
+    out_dir.mkdir(parents=True, exist_ok=True)
     config = ConfigParser()
     args = config.parse()
     device = torch.device("cuda")
@@ -181,8 +181,8 @@ if __name__ == "__main__":
         print(f"{layer_name} 量化INT{WEIGHT_WIDTH}误差: {error:.4f}")
         packed_data_bin, packed_data_hex = pack_to_nbit(q_weights=weight_int8, max_val=WEIGHT_MAX, num_bits=WEIGHT_WIDTH, pack_bits=int(POST_PARALLEL * WEIGHT_WIDTH))
         # 2. 4 个 8-bit 合并为 32-bit
-        save_coe_file(packed_data_hex, f"./{out_dir}/weights_{layer_name}.coe")
-        save_txt_file(packed_data_bin, f"./{out_dir}/weights_{layer_name}.txt")
+        save_coe_file(packed_data_hex, str(out_dir / f"weights_{layer_name}.coe"))
+        save_txt_file(packed_data_bin, str(out_dir / f"weights_{layer_name}.txt"))
     print("COE 文件已生成！") #此处COE文件生成有问题！！！！，每行不对齐
 
 
@@ -190,13 +190,13 @@ if __name__ == "__main__":
     DATA_WIDTH = int(POST_PARALLEL * WEIGHT_WIDTH)
     BLOCK_DEPTH = 2048
 
-    with open(f"./{out_dir}/weights_{layer_name}.txt") as f:
+    with open(out_dir / f"weights_{layer_name}.txt") as f:
         data = [line.strip() for line in f if line.strip()]
 
     bank_num = math.ceil(len(data) / BLOCK_DEPTH)
 
     for b in range(bank_num):
-        with open(f"./{out_dir}/weights_bank_{b}.txt", "w") as f:
+        with open(out_dir / f"weights_bank_{b}.txt", "w") as f:
             for i in range(BLOCK_DEPTH):
                 idx = b * BLOCK_DEPTH + i
                 if idx < len(data):
