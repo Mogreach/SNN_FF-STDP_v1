@@ -123,19 +123,10 @@ module controller #(
 
     localparam R_W_SRAM_CLK_tstep_act = 2;
     localparam R_W_SRAM_CLK_tstep_act_LOG2 = $clog2(R_W_SRAM_CLK_tstep_act);
-    localparam AER_TOTAL_CLK_tstep_act = R_W_SRAM_CLK_tstep_act * (OUTPUT_NEURON / POST_NEUR_PARALLEL) - 1;
-
-
     localparam R_W_SRAM_CLK_tref = 4;
     localparam R_W_SRAM_CLK_tref_LOG2 = $clog2(R_W_SRAM_CLK_tref);
-    localparam AER_TOTAL_CLK_tref = R_W_SRAM_CLK_tref * (OUTPUT_NEURON / POST_NEUR_PARALLEL) - 1;
 	// FSM states 
 	localparam WAIT       = 4'd0; 
-    // Kept reserved so a corrupted state returns to the default safe output.
-    localparam W_NEUR     = 4'd1;
-    localparam R_NEUR     = 4'd2;
-    localparam W_SYN      = 4'd3;
-    localparam R_SYN      = 4'd4;
     localparam PUSH       = 4'd5;
     localparam POP_NEUR   = 4'd6;
     localparam NEUR_ACT   = 4'd7;
@@ -143,7 +134,6 @@ module controller #(
     localparam TSTEP_ACT  = 4'd9;
 	localparam POP_TSTEP= 4'd10;
     localparam TREF       = 4'd11;
-    localparam WAIT_SPIDN = 4'd12;
     localparam WAIT_REQDN = 4'd13;
 
 	//----------------------------------------------------------------------------------
@@ -152,8 +142,7 @@ module controller #(
     
     reg          AERIN_REQ_sync_int, AERIN_REQ_sync;
 
-    wire         neuron_event,tstep_event, tref_event;
-    wire         CTRL_TSTEP_EVENT_posedge;
+    wire         neuron_event,tstep_event;
     wire         CTRL_TSTEP_EVENT_negedge;
     wire         tref_finish;
     
@@ -176,7 +165,6 @@ module controller #(
 	//----------------------------------------------------------------------------------
     assign neuron_event   = !AERIN_ADDR[AER_WIDTH-1] && !AERIN_ADDR[AER_WIDTH-2];
     assign tstep_event    = !AERIN_ADDR[AER_WIDTH-1] && AERIN_ADDR[AER_WIDTH-2];
-    assign tref_event     = AERIN_ADDR[AER_WIDTH-1] && !AERIN_ADDR[AER_WIDTH-2];
     assign CTRL_TSTEP_EVENT_negedge = !CTRL_TSTEP_EVENT & CTRL_TSTEP_EVENT_int;
     assign tref_finish = (CTRL_TREF_EVENT && (pre_neur_cnt == INPUT_NEURON))? 1'b1 : 1'b0; // 在推理更新状态，当突触前神经元计数到784时拉高，跳转至wait
 	assign CTRL_AEROUT_TREF_FINISH = tref_finish;
@@ -305,170 +293,6 @@ module controller #(
     // Output logic      
     always @(*) begin
         case(state)
-        W_NEUR : begin
-            // To synaptic_core
-            CTRL_SYNARRAY_ADDR  = 'd0;
-            CTRL_SYNARRAY_CS    = 1'b0;
-            CTRL_SYNARRAY_WE    = 1'b0;
-            // sram关键控制信号
-            CTRL_PRE_NEUR_CS    = 1'b0;
-            CTRL_PRE_NEUR_WE    = 1'b0;
-            CTRL_POST_NEUR_CS   = 1'b0;
-            CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
-            CTRL_PRE_CNT_EN     = 1'b0;
-            // To neuron
-            // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
-            // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
-            // 控制器神经元地址
-            CTRL_PRE_NEURON_ADDRESS = 'd0;
-            CTRL_POST_NEURON_ADDRESS = 'd0;
-            // 事件类型
-            CTRL_NEUR_EVENT     = 1'b0;
-            CTRL_TSTEP_EVENT    = 1'b0;
-            CTRL_TREF_EVENT     = 1'b0;
-            // To scheduler
-            CTRL_SCHED_VIRTS    = 'd0;
-            CTRL_SCHED_ADDR     = 'd0;
-            CTRL_SCHED_EVENT_IN = 1'b0;
-            CTRL_SCHED_POP_N    = 1'b1;
-            // To aer_out
-            CTRL_AEROUT_PUSH_NEUR = 1'b0;
-            CTRL_AEROUT_POP_NEUR  = 1'b0;
-            CTRL_AEROUT_POP_TSTEP = 1'b0; 
-            // 其他信号
-            AERIN_ACK           = 1'b0;
-            post_neur_cnt_inc   = 1'b0;
-            pre_neur_cnt_inc    = 1'b0; 
-        end
-        R_NEUR : begin
-            // To synaptic_core
-            CTRL_SYNARRAY_ADDR  = 'd0;
-            CTRL_SYNARRAY_CS    = 1'b0;
-            CTRL_SYNARRAY_WE    = 1'b0;
-            // sram关键控制信号
-            CTRL_PRE_NEUR_CS    = 1'b0;
-            CTRL_PRE_NEUR_WE    = 1'b0;
-            CTRL_POST_NEUR_CS   = 1'b0;
-            CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
-            CTRL_PRE_CNT_EN     = 1'b0;
-            // To neuron
-            // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
-            // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
-            // 控制器神经元地址
-            CTRL_PRE_NEURON_ADDRESS = 'd0;
-            CTRL_POST_NEURON_ADDRESS = 'd0;
-            // 事件类型
-            CTRL_NEUR_EVENT     = 1'b0;
-            CTRL_TSTEP_EVENT    = 1'b0;
-            CTRL_TREF_EVENT     = 1'b0;
-            // To scheduler
-            CTRL_SCHED_VIRTS    = 'd0;
-            CTRL_SCHED_ADDR     = 'd0;
-            CTRL_SCHED_EVENT_IN = 1'b0;
-            CTRL_SCHED_POP_N    = 1'b1;
-            // To aer_out
-            CTRL_AEROUT_PUSH_NEUR = 1'b0;
-            CTRL_AEROUT_POP_NEUR  = 1'b0;
-            CTRL_AEROUT_POP_TSTEP = 1'b0; 
-            // 其他信号
-            AERIN_ACK           = 1'b0;
-            post_neur_cnt_inc   = 1'b0;
-            pre_neur_cnt_inc    = 1'b0; 
-        end
-        W_SYN : begin
-            // To synaptic_core
-            CTRL_SYNARRAY_ADDR  = 'd0;
-            CTRL_SYNARRAY_CS    = 1'b0;
-            CTRL_SYNARRAY_WE    = 1'b0;
-            // sram关键控制信号
-            CTRL_PRE_NEUR_CS    = 1'b0;
-            CTRL_PRE_NEUR_WE    = 1'b0;
-            CTRL_POST_NEUR_CS   = 1'b0;
-            CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
-            CTRL_PRE_CNT_EN     = 1'b0;
-            // To neuron
-            // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
-            // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
-            // 控制器神经元地址
-            CTRL_PRE_NEURON_ADDRESS = 'd0;
-            CTRL_POST_NEURON_ADDRESS = 'd0;
-            // 事件类型
-            CTRL_NEUR_EVENT     = 1'b0;
-            CTRL_TSTEP_EVENT    = 1'b0;
-            CTRL_TREF_EVENT     = 1'b0;
-            // To scheduler
-            CTRL_SCHED_VIRTS    = 'd0;
-            CTRL_SCHED_ADDR     = 'd0;
-            CTRL_SCHED_EVENT_IN = 1'b0;
-            CTRL_SCHED_POP_N    = 1'b1;
-            // To aer_out
-            CTRL_AEROUT_PUSH_NEUR = 1'b0;
-            CTRL_AEROUT_POP_NEUR  = 1'b0;
-            CTRL_AEROUT_POP_TSTEP = 1'b0; 
-            // 其他信号
-            AERIN_ACK           = 1'b0;
-            post_neur_cnt_inc   = 1'b0;
-            pre_neur_cnt_inc    = 1'b0; 
-        end
-        R_SYN : begin
-            // To synaptic_core
-            CTRL_SYNARRAY_ADDR  = 'd0;
-            CTRL_SYNARRAY_CS    = 1'b0;
-            CTRL_SYNARRAY_WE    = 1'b0;
-            // sram关键控制信号
-            CTRL_PRE_NEUR_CS    = 1'b0;
-            CTRL_PRE_NEUR_WE    = 1'b0;
-            CTRL_POST_NEUR_CS   = 1'b0;
-            CTRL_POST_NEUR_WE   = 1'b0;
-            CTRL_SYNA_WR_EVENT  = 1'b0;
-            CTRL_SYNA_RD_EVENT  = 1'b0;
-            CTRL_SYNA_PROG_DATA = 'd0;
-            CTRL_PRE_CNT_EN     = 1'b0;
-            // To neuron
-            // SPI控制读写事件
-            CTRL_WR_NEUR_EVENT  = 1'b0;
-            CTRL_RD_NEUR_EVENT  = 1'b0;
-            // SPI控制编入数据
-            CTRL_POST_NEUR_PROG_DATA = 'd0;
-            // 控制器神经元地址
-            CTRL_PRE_NEURON_ADDRESS = 'd0;
-            CTRL_POST_NEURON_ADDRESS = 'd0;
-            // 事件类型
-            CTRL_NEUR_EVENT     = 1'b0;
-            CTRL_TSTEP_EVENT    = 1'b0;
-            CTRL_TREF_EVENT     = 1'b0;
-            // To scheduler
-            CTRL_SCHED_VIRTS    = 'd0;
-            CTRL_SCHED_ADDR     = 'd0;
-            CTRL_SCHED_EVENT_IN = 1'b0;
-            CTRL_SCHED_POP_N    = 1'b1;
-            // To aer_out
-            CTRL_AEROUT_PUSH_NEUR = 1'b0;
-            CTRL_AEROUT_POP_NEUR  = 1'b0;
-            CTRL_AEROUT_POP_TSTEP = 1'b0; 
-            // 其他信号
-            AERIN_ACK           = 1'b0;
-            post_neur_cnt_inc   = 1'b0;
-            pre_neur_cnt_inc    = 1'b0; 
-        end
         TREF : begin
             // sram关键控制信号
             CTRL_SYNA_WR_EVENT  = 1'b0;

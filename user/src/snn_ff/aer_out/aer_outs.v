@@ -87,9 +87,6 @@ module aer_outs #(
     reg                                 goodness_en_d0              ;
     reg                                 goodness_en_d1              ;
     reg                [   5: 0]        ctrl_tref_finish_delay      ;
-    // 路径太长，违反时序，增加一级寄存器
-    reg                                 fifo_wr_en_d0               ;
-    reg                [  47: 0]        aer_out_fifo_din_d0         ;
 
     wire                                aer_out_start               ;
     wire                                AEROUT_ACK_sync_negedge     ;
@@ -196,8 +193,6 @@ module aer_outs #(
             goodness_en_d0 <= 1'b0;
             goodness_en_d1 <= 1'b0;
             ctrl_tref_finish_delay <= 6'b0;
-            // aer_out_fifo_din_d0 <= 48'b0;
-            // fifo_wr_en_d0 <= 1'b0;
         end
         else begin
             AEROUT_ACK_sync_int <= AEROUT_ACK;
@@ -208,8 +203,6 @@ module aer_outs #(
             goodness_en_d0 <= goodness_en;
             goodness_en_d1 <= goodness_en_d0;
             ctrl_tref_finish_delay <= {ctrl_tref_finish_delay[4:0],CTRL_AEROUT_TREF_FINISH};
-            // aer_out_fifo_din_d0 <= aer_out_fifo_din;
-            // fifo_wr_en_d0 <= fifo_wr_en;
         end
     end
 

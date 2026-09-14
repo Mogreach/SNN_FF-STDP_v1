@@ -9,6 +9,7 @@ module tb_core_test;
     parameter integer TIME_STEPS = 8;
     parameter integer INPUT_NEURONS = 784;
     parameter integer OUTPUT_NEURONS = 256;
+    parameter integer AER_WIDTH = 12;
     parameter integer SIM_TIMEOUT_NS = 5_000_000;
 
     // These absolute paths must be changed when the repository is moved.
@@ -25,7 +26,7 @@ module tb_core_test;
     logic RST;
     logic IS_POS;
     logic IS_TRAIN;
-    logic [11:0] AERIN_ADDR;
+    logic [AER_WIDTH-1:0] AERIN_ADDR;
     logic AERIN_REQ;
     wire AERIN_ACK;
     wire [31:0] GOODNESS;
@@ -33,7 +34,7 @@ module tb_core_test;
 
     // Top_test internally acknowledges its AER output. These aliases are
     // observation-only signals for waveforms and counters.
-    wire [11:0] AEROUT_ADDR = dut.AEROUT_ADDR;
+    wire [AER_WIDTH-1:0] AEROUT_ADDR = dut.AEROUT_ADDR;
     wire AEROUT_REQ = dut.AEROUT_REQ;
     wire AEROUT_ACK = dut.AEROUT_ACK;
 
@@ -49,7 +50,8 @@ module tb_core_test;
     Top_test #(
         .TIME_STEP    (TIME_STEPS),
         .INPUT_NEURON (INPUT_NEURONS),
-        .OUTPUT_NEURON(OUTPUT_NEURONS)
+        .OUTPUT_NEURON(OUTPUT_NEURONS),
+        .AER_WIDTH    (AER_WIDTH)
     ) dut (
         .CLK         (CLK),
         .RST         (RST),
@@ -115,14 +117,15 @@ module tb_core_test;
 
     always @(posedge CLK) begin
         if (!RST && AERIN_REQ && AERIN_ACK) begin
-            if (AERIN_ADDR[11:10] == 2'b01)
+            if (AERIN_ADDR[AER_WIDTH-1 -: 2] == 2'b01)
                 accepted_tsteps_this_sample <= accepted_tsteps_this_sample + 1;
-            else if (AERIN_ADDR[11:10] == 2'b00)
+            else if (AERIN_ADDR[AER_WIDTH-1 -: 2] == 2'b00)
                 input_events_this_sample <= input_events_this_sample + 1;
         end
 
         AEROUT_REQ_d <= AEROUT_REQ;
-        if (!RST && AEROUT_REQ && !AEROUT_REQ_d && AEROUT_ADDR[11:10] == 2'b00)
+        if (!RST && AEROUT_REQ && !AEROUT_REQ_d &&
+            AEROUT_ADDR[AER_WIDTH-1 -: 2] == 2'b00)
             output_spikes_this_sample <= output_spikes_this_sample + 1;
 
         if (!RST && PROCESS_DONE) begin
@@ -157,7 +160,7 @@ module tb_core_test;
         RST = 1'b1;
         IS_POS = 1'b1;
         IS_TRAIN = 1'b0;
-        AERIN_ADDR = 12'd0;
+        AERIN_ADDR = '0;
         AERIN_REQ = 1'b0;
         completed_samples = 0;
         input_events_this_sample = 0;
@@ -176,9 +179,9 @@ module tb_core_test;
                     byte_index = flat_bit_index / 8;
                     bit_in_byte = 7 - (flat_bit_index % 8);
                     if (spike_bytes[byte_index][bit_in_byte])
-                        send_aer_event({2'b00, pixel_index[9:0]});
+                        send_aer_event({2'b00, pixel_index[AER_WIDTH-3:0]});
                 end
-                send_aer_event({2'b01, 10'd0});
+                send_aer_event({2'b01, {(AER_WIDTH-2){1'b0}}});
             end
 
             wait (completed_samples == sample_index + 1);
@@ -195,7 +198,7 @@ module tb_core_test;
         $finish;
     end
 
-    task automatic send_aer_event(input logic [11:0] event_addr);
+    task automatic send_aer_event(input logic [AER_WIDTH-1:0] event_addr);
         begin
             while (AERIN_ACK) @(posedge CLK);
             @(negedge CLK);

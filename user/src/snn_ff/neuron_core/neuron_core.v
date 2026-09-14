@@ -94,7 +94,9 @@ module neuron_core #(
     //             neur_event_d <= CTRL_NEUR_EVENT; 
     //     end                                          
 
-    pre_neuron pre_neuron_0( 
+    pre_neuron #(
+    .PRE_NEUR_DATA_WIDTH(PRE_NEUR_DATA_WIDTH)
+    ) pre_neuron_0(
     .pre_spike_cnt(pre_neuron_sram_out),          // 突触前神经元发放脉冲数量 from SRAM
     .neuron_event(CTRL_NEUR_EVENT),               // synaptic event trigger
     .neuron_event_pulse(CTRL_PRE_CNT_EN),
@@ -225,4 +227,3 @@ module neuron_core #(
 //);
 
 endmodule
-

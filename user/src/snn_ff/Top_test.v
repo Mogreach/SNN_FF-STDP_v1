@@ -45,7 +45,7 @@ module Top_test
 (
     input  wire                         CLK                        ,
     input  wire                         RST                        ,
-    input  wire        [ 11: 0]         AERIN_ADDR                 ,
+    input  wire        [AER_WIDTH-1:0]  AERIN_ADDR                 ,
     input  wire                         AERIN_REQ                  ,
     input  wire                         IS_POS                     ,
     input  wire                         IS_TRAIN                   ,
