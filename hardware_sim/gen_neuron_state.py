@@ -1,5 +1,4 @@
 import sys
-sys.path.append('D:/OneDrive/SNN_FFSTDP/SNN-forwardforward')
 import os
 from hardware_sim_config import *
 
@@ -111,7 +110,8 @@ if __name__ == "__main__":
 
     save_txt_file(post_state, filename=str(out_dir / "post_neuron_state.txt"))
     save_txt_file(pre_state, filename=str(out_dir / "pre_neuron_state.txt"))
+    save_coe_file(post_state, filename=str(out_dir / "post_neuron_state.coe"))
+    save_coe_file(pre_state, filename=str(out_dir / "pre_neuron_state.coe"))
 
-    print("TXT 文件已生成！")
+    print("TXT/COE 文件已生成！")
     
-

@@ -1,5 +1,4 @@
 import sys
-sys.path.append('D:/OneDrive/SNN_FFSTDP/SNN-forwardforward')
 import matplotlib.pyplot as plt
 import torch
 from spikingjelly.datasets.n_mnist import NMNIST
@@ -8,8 +7,7 @@ import seaborn as sns
 import torch
 import torch.utils.data as data
 import torchvision
-from src.ff_snn_mlp import Net, spike_encoder
-from src.generate_neg_sample import *
+from ff_snn_mlp import Net, spike_encoder
 import torch.nn.functional as F
 from config import ConfigParser
 import numpy as np
@@ -29,7 +27,23 @@ def overlay_label_on_img(img, label):
     # 将第一行第y列的值设置为最大值
     img[0, label] = max_value
     return img
-
+def overlay_y_on_x(x, y, classes=10):
+    x_ = x.clone()
+    batch_size = x.shape[0]
+    x_[:, :, 0, :classes] *= 0.0
+    max_value = x_.max()
+    for i in range(batch_size):
+        x_[i, :, 0, y[i].item()] = max_value
+    return x_
+def get_y_neg(y, num_classes, device):
+    y_neg = y.clone()
+    for idx, y_samp in enumerate(y):
+        allowed_indices = list(range(num_classes))
+        allowed_indices.remove(y_samp.item())
+        y_neg[idx] = torch.tensor(allowed_indices)[
+            torch.randint(len(allowed_indices), size=(1,))
+        ].item()
+    return y_neg.to(device)
 def save_spike_data(spike_data, filename):
     """
     按照时间步长顺序保存脉冲数据到二进制文件，每个值占 1 位。
@@ -182,13 +196,15 @@ def gen_dataset_spike(train_pics,test_pics,T):
     all_spikes = []
     test_acc = 0
     test_count = 0
+    classes = getattr(test_dataset, "classes", None)
+    classes_len = len(classes)
     with torch.no_grad():
         for x, y in train_data_loader:
             test_count += 1 
             x = x.to(device)
             y = y.to(device)
             x_pos = overlay_y_on_x(x, y)
-            y_neg = get_y_neg(y, device)
+            y_neg = get_y_neg(y,classes_len, device)
             x_neg = overlay_y_on_x(x, y_neg)
             predict_result , goodness,freq = net.predict_analyze(x)
             test_acc += predict_result.eq(y).cpu().float().mean().item()

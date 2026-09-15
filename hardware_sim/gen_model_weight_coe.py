@@ -1,5 +1,4 @@
 import sys
-sys.path.append('D:/OneDrive/SNN_FFSTDP/SNN-forwardforward')
 import matplotlib.pyplot as plt
 import torch
 import os
@@ -9,7 +8,7 @@ import torch.utils.data as data
 import torch.nn.functional as F
 import numpy as np
 import math
-from src.ff_snn_mlp import Net
+from ff_snn_mlp import Net
 from config import ConfigParser
 from hardware_sim_config import *
 def quantize_to_int(x_fp, scale, bits=16):
@@ -161,7 +160,7 @@ if __name__ == "__main__":
     args = config.parse()
     device = torch.device("cuda")
     net = Net(dims=[784,256, 10],tau=args.tau, epoch=args.epochs, T=T, lr=args.lr,
-              v_threshold=V_THRESHOLD_POS,v_threshold_neg=V_THRESHOLD_NEG, opt=args.opt, loss_threshold=THETA)
+              v_threshold_pos=V_THRESHOLD_POS,v_threshold_neg=V_THRESHOLD_NEG, opt=args.opt, loss_threshold=THETA)
     net.load(NET_PATH)
     layer_weights = {}
     layer_weights_int8 = {}

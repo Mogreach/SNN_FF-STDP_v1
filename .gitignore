@@ -52,7 +52,7 @@ transcript
 !/Gen_out/Saif/
 !/Gen_out/Saif/README.md
 test_labels.h
-
+hardware_sim/data/
 # Local documentation attachments/screenshots
 /assets/
 /prj/
