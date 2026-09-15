@@ -6,7 +6,7 @@
 
 - `Top_test.v`：当前单层 784→256 板级/集成仿真顶层；为输出 AER 生成延迟 ack，并把单核完成信号导出为 `PROCESS_DONE`。
 - `ODIN_ffstdp.v`：单层核心，组合 controller、scheduler、神经元、突触、SRAM、AER 输出与梯度 ROM。
-- `controller.v`：核心内部 9 状态 one-hot 控制器。
+- `controller.v`：核心内部 9 状态二进制编码控制器，安排 RAM 读、计算和写回节拍。
 - `scheduler.v`：外部输入事件、内部神经元事件和时间事件的 FIFO 调度。
 - `aer_out/`：`aer_outs.v` 汇总并行 lane 的发放并累计 goodness，`adder_tree.v` 为其配套加法树。
 - `neuron_core/`：`pre_neuron.v`、`if_neuron.v` 与 `neuron_core.v`。
@@ -27,6 +27,6 @@ AER 地址最高两位是事件类型：`00` 神经元脉冲，`01` 时间步事
 
 ## 当前源级校验状态
 
-当前单层 `Top_test` 已通过 Icarus Verilog 11 的完整层次展开。恢复版 `if_neuron` 的上层参数/端口已重新对齐，AER lane 地址已定宽，20-bit 后神经元状态按 `{enable[1], spike_count[6], membrane[13]}` 拼接。
+当前单层 `Top_test` 使用参数化 8-lane 数据通路，20-bit 后神经元状态按 `{enable[1], spike_count[6], membrane[13]}` 拼接。`if_neuron` 的流水寄存器在 reset 时清零；更改其流水级数必须同步调整 controller 周期预算。
 
 Icarus 环境用 `user/sim/iverilog/axi_input_fifo_model.sv` 行为模型替代 Vivado 的 `axi_input_fifo` IP 模型，因此 `tb_core_test.sv` 和 `tb_axi4_rw_test_v1_0_M_AXI.sv` 都能在 Icarus 下直接回归；见 `user/sim/iverilog/README.md`。Vivado/xsim 工程回归仍应使用工程生成的 IP 模型。

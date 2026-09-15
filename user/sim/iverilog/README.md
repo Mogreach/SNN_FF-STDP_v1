@@ -20,7 +20,7 @@ gtkwave build_core_test/tb_core_test.vcd
 
 ## AXI+SNN 测试
 
-入口为 `../tb_axi4_rw_test_v1_0_M_AXI.sv`，默认读取 2 个训练样本，并使用 `axi_input_fifo_model.sv` 代替仅在 Vivado 工程中存在的 FIFO Generator 仿真模型。
+入口为 `../tb_axi4_rw_test_v1_0_M_AXI.sv`，当前默认读取 3 个训练样本（可在 TB 参数中调整），并使用 `axi_input_fifo_model.sv` 代替仅在 Vivado 工程中存在的 FIFO Generator 仿真模型。
 
 从本目录运行：
 

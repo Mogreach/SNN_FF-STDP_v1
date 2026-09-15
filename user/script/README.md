@@ -1,7 +1,7 @@
-# script
+# Vivado 辅助脚本
 
-- `system.tcl`：Vivado 导出的 Block Design 重建脚本。当前设计启用 PS7 的 SD0（MIO 40..45、CD=MIO10）、UART0（MIO14..15）、FCLK0=100 MHz 和 S_AXI_HP0；PL AXI master 通过 SmartConnect 访问 512 MiB DDR 映射。两个板上按键经 `key_debounce` 和反相逻辑产生启动/训练使能。
-- `gen_saif.tcl`：读取 SAIF 并生成时序与功耗报告的参考脚本，内部工程路径和层次名需要按当前机器修改。
-- `brian2_sim/`：为 Brian2 侧参考仿真预留的目录。
+- `system.tcl`：PS7、时钟、SmartConnect、AXI 与按键连接的 Block Design 导出参考。
+- `gen_saif.tcl`：导入 SAIF、生成时序/功耗报告的辅助脚本。
+- `brian2_sim/`：软件侧参考资料。
 
-执行 `system.tcl` 前先把 `user/src` 加入 Vivado sources，否则 `Top_test`、`axi4_rw_test_v1_0` 和 `key_debounce` module reference 无法创建。
+当前工程目标为 Zynq-7010（`xc7z010clg400-1`）。`system.tcl` 中自动新建工程的 part 是历史值，不能直接执行来创建当前工程；应先在 7010 工程中加入 `user/src`，再把脚本用于比对或重建 BD 连接。执行后必须 Validate Design，并重新确认 PS7、FCLK、HP 口、UART、SD 和按键约束。
