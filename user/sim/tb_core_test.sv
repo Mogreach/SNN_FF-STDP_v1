@@ -45,6 +45,8 @@ module tb_core_test;
     integer input_events_this_sample;
     integer output_spikes_this_sample;
     integer accepted_tsteps_this_sample;
+    integer pre_ram_init_index;
+    integer post_ram_init_index;
     logic AEROUT_REQ_d;
 
     Top_test #(
@@ -99,23 +101,69 @@ module tb_core_test;
                  bytes_read, SAMPLE_COUNT);
     end
 
-    // Replace the behavioral SRAM models' random power-up values with the
-    // generated MNIST initialization files after their initial blocks finish.
+    // Neuron RAM is self-written in both modes. The weight model exposes its
+    // internal SRAM array only in SNN_RAM_SIM; FPGA mode uses the IP COE file.
     initial begin
         #1;
+`ifdef SNN_RAM_SIM
         $readmemb(WEIGHT_DATA_FILE,
             dut.u_ODIN_ffstdp.u_synaptic_core.u_sram_synaptic.SRAM,
             0, INPUT_NEURONS * OUTPUT_NEURONS / dut.POST_NEUR_PARALLEL - 1);
+`endif
         $readmemh(POST_NEURON_STATE_FILE,
             dut.u_ODIN_ffstdp.neuron_core_inst.neurarray_post.SRAM,
             0, OUTPUT_NEURONS / dut.POST_NEUR_PARALLEL - 1);
         $readmemh(PRE_NEURON_STATE_FILE,
             dut.u_ODIN_ffstdp.neuron_core_inst.neurarray_pre.SRAM,
             0, INPUT_NEURONS - 1);
-        $display("Loaded SNN weights and neuron states.");
+
+        // Validate SRAM contents, not Qr/Q.  Qr is a synchronous-read output
+        // register and is expected to be X before its first selected clock.
+        for (pre_ram_init_index = 0;
+             pre_ram_init_index < INPUT_NEURONS;
+             pre_ram_init_index = pre_ram_init_index + 1) begin
+            if ($isunknown(dut.u_ODIN_ffstdp.neuron_core_inst
+                           .neurarray_pre.SRAM[pre_ram_init_index]))
+                $fatal(1, "Pre-neuron RAM initialization failed: file=%s addr=%0d value=%h",
+                       PRE_NEURON_STATE_FILE, pre_ram_init_index,
+                       dut.u_ODIN_ffstdp.neuron_core_inst
+                       .neurarray_pre.SRAM[pre_ram_init_index]);
+        end
+        for (post_ram_init_index = 0;
+             post_ram_init_index < OUTPUT_NEURONS / dut.POST_NEUR_PARALLEL;
+             post_ram_init_index = post_ram_init_index + 1) begin
+            if ($isunknown(dut.u_ODIN_ffstdp.neuron_core_inst
+                           .neurarray_post.SRAM[post_ram_init_index]))
+                $fatal(1, "Post-neuron RAM initialization failed: file=%s addr=%0d value=%h",
+                       POST_NEURON_STATE_FILE, post_ram_init_index,
+                       dut.u_ODIN_ffstdp.neuron_core_inst
+                       .neurarray_post.SRAM[post_ram_init_index]);
+        end
+        $display("Loaded neuron states.");
     end
 
     always @(posedge CLK) begin
+        if (!RST &&
+            !dut.u_ODIN_ffstdp.SCHED_EMPTY &&
+            $isunknown(dut.u_ODIN_ffstdp.SCHED_DATA_OUT)) begin
+            $fatal(1, "Unknown scheduler FIFO output: empty=%b read_ptr=%0d write_ptr=%0d data=%h at %0t",
+                dut.u_ODIN_ffstdp.SCHED_EMPTY,
+                dut.u_ODIN_ffstdp.scheduler_inst.fifo_spike_0.read_ptr,
+                dut.u_ODIN_ffstdp.scheduler_inst.fifo_spike_0.write_ptr,
+                dut.u_ODIN_ffstdp.SCHED_DATA_OUT, $time);
+        end
+        if (!RST &&
+            dut.u_ODIN_ffstdp.controller_inst.CTRL_PRE_NEUR_WE &&
+            ($isunknown(dut.u_ODIN_ffstdp.controller_inst.CTRL_PRE_NEURON_ADDRESS) ||
+             $isunknown(dut.u_ODIN_ffstdp.neuron_core_inst.pre_neuron_sram_in))) begin
+            $fatal(1, "Unknown pre-neuron write: ctrl_state=%b addr=%0d pre_q=%h pre_d=%h event=%b tref=%b at %0t",
+                dut.u_ODIN_ffstdp.controller_inst.state,
+                dut.u_ODIN_ffstdp.controller_inst.CTRL_PRE_NEURON_ADDRESS,
+                dut.u_ODIN_ffstdp.neuron_core_inst.pre_neuron_sram_out,
+                dut.u_ODIN_ffstdp.neuron_core_inst.pre_neuron_sram_in,
+                dut.u_ODIN_ffstdp.CTRL_NEUR_EVENT,
+                dut.u_ODIN_ffstdp.CTRL_TREF_EVENT, $time);
+        end
         if (!RST && AERIN_REQ && AERIN_ACK) begin
             if (AERIN_ADDR[AER_WIDTH-1 -: 2] == 2'b01)
                 accepted_tsteps_this_sample <= accepted_tsteps_this_sample + 1;

@@ -158,7 +158,8 @@ module controller #(
     assign neuron_event   = !AERIN_ADDR[AER_WIDTH-1] && !AERIN_ADDR[AER_WIDTH-2];
     assign tstep_event    = !AERIN_ADDR[AER_WIDTH-1] && AERIN_ADDR[AER_WIDTH-2];
     assign CTRL_TSTEP_EVENT_negedge = !CTRL_TSTEP_EVENT & CTRL_TSTEP_EVENT_int;
-    assign tref_finish = (CTRL_TREF_EVENT && (pre_neur_cnt == INPUT_NEURON))? 1'b1 : 1'b0; // 在推理更新状态，当突触前神经元计数到784时拉高，跳转至wait
+    assign tref_finish = (ctrl_tref_cnt == R_W_SRAM_CLK_tref - 1'b1) && CTRL_TREF_EVENT && (post_neur_cnt == OUTPUT_NEURON - POST_NEUR_PARALLEL) &&
+                        (pre_neur_cnt == INPUT_NEURON - 1'b1); // 在推理更新状态，当突触前神经元计数到784时拉高，跳转至wait
 	assign CTRL_AEROUT_TREF_FINISH = tref_finish;
     assign ctrl_state = state;
     //----------------------------------------------------------------------------------

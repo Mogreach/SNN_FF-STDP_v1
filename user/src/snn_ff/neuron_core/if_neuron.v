@@ -6,6 +6,9 @@ module if_neuron #(
     parameter WEIGHT_WIDTH = 8
 )( 
     input  wire CLK,
+    // Active-high reset.  This clears the read-to-compute pipeline before
+    // the controller can request the first neuron-RAM writeback.
+    input  wire RST,
     input  wire  [POST_NEUR_SPIKE_CNT_WIDTH-1:0] post_spike_cnt,          // 突触后神经元发放脉冲数量 from SRAM
     output  wire [POST_NEUR_SPIKE_CNT_WIDTH-1:0] post_spike_cnt_next,          // 突触后神经元发放脉冲数量 to SRAM
 
@@ -58,12 +61,18 @@ module if_neuron #(
     // );
 
     // assign spike_out       = (state_core_next_i >= param_thr) & time_step_event;
-    always @(posedge CLK)           
-    begin         
-        state_core_reg <= state_core;                               
-        syn_weight_reg <= syn_weight;
-        param_thr_reg  <= param_thr;
-    end                                          
+    always @(posedge CLK or posedge RST) begin
+        if (RST) begin
+            state_core_reg <= 'd0;
+            syn_weight_reg <= 'd0;
+            param_thr_reg  <= 'd0;
+        end
+        else begin
+            state_core_reg <= state_core;
+            syn_weight_reg <= syn_weight;
+            param_thr_reg  <= param_thr;
+        end
+    end
 
     always @(*) begin 
         if (time_step_event) begin

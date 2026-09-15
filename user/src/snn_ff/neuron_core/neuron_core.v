@@ -23,7 +23,7 @@ module neuron_core #(
 )(
     // Global inputs ------------------------------------------
     input  wire CLK,
-    input  wire RST_N,
+    input  wire RST,
     // Synaptic inputs ----------------------------------------
     input  wire [SYN_ARRAY_DATA_WIDTH-1:0] SYNARRAY_RDATA,
     // Controller inputs ----------------------------------------
@@ -118,6 +118,7 @@ module neuron_core #(
             )
             if_neuron_gen(
                 .CLK                                   (CLK                ),
+                .RST                                   (RST                ),
                 .post_spike_cnt                        (post_neuron_spike_cnt),// 突触后神经元发放脉冲数量 from SRAM
                 .post_spike_cnt_next                   (post_neuron_spike_cnt_next),// 突触后神经元发放脉冲数量 to SRAM
                 .param_thr                             (post_neuron_thresold),// neuron firing threshold parameter 
@@ -134,21 +135,7 @@ module neuron_core #(
             assign POST_NEUR_S_CNT[i*POST_NEUR_SPIKE_CNT_WIDTH +: POST_NEUR_SPIKE_CNT_WIDTH] = post_neuron_spike_cnt;
         end
     endgenerate
-    // 突触前神经元SRAM 读优先时序
-    // SRAM_1024x8_wrapper neurarray_pre (       
-        
-    //     // Global inputs
-    //     .clk         (CLK),
-    
-    //     // Control and data inputs
-    //     // .ena        (CTRL_PRE_NEUR_CS),
-    //     .we         (CTRL_PRE_NEUR_WE),
-    //     .a          (CTRL_PRE_NEURON_ADDRESS),
-    //     .d          (pre_neuron_sram_in),
-    //     // Data output
-    //     .spo          (pre_neuron_sram_out)
-    // );
-    
+    // 神经元状态存储器：FPGA 与仿真均使用参数化自写 RAM。
     sram_pre_neuron#(
     .ADDR_WIDTH     (PRE_NEUR_ADDR_WIDTH              ),
     .DATA_WIDTH     (PRE_NEUR_DATA_WIDTH             ),
@@ -163,23 +150,8 @@ module neuron_core #(
         .A                                  (CTRL_PRE_NEURON_ADDRESS                         ),// Address bus
         .D                                  (pre_neuron_sram_in                         ),// Data input bus (write)
     // Data output
-        .Q                                  (pre_neuron_sram_out                        )// Data output bus (read)
+    .Q                                  (pre_neuron_sram_out                        )// Data output bus (read)
     );
-
-    // 突触后神经元SRAM 读优先时序
-    // SRAM_256x128_wrapper neurarray_post (       
-        
-    //     // Global inputs
-    //     .clka         (CLK),
-    
-    //     // Control and data inputs
-    //     .ena         (CTRL_POST_NEUR_CS),
-    //     .wea         (CTRL_POST_NEUR_WE),
-    //     .addra          (post_neuron_sram_addr),
-    //     .dina          (post_neuron_sram_in),
-    //     // Data output
-    //     .douta          (post_neuron_sram_out)
-    // );
     sram_post_neuron#(
     .ADDR_WIDTH     (POST_NEUR_SRAM_ADDR_WIDTH),
     .DATA_WIDTH     (POST_NEUR_SRAM_DATA_WIDTH         ),
@@ -194,16 +166,7 @@ module neuron_core #(
         .A                                  (post_neuron_sram_addr                         ),// Address bus
         .D                                  (post_neuron_sram_in                         ),// Data input bus (write)
     // Data output
-        .Q                                  (post_neuron_sram_out                        )// Data output bus (read)
+    .Q                                  (post_neuron_sram_out                        )// Data output bus (read)
     );
-
-
-//    Neuron_SRAM neurarray_0(
-//    .clka  (CLK      ),  // input wire clka
-//    .ena   (CTRL_NEURMEM_CS       ),  // input 片选使能信号
-//    .wea   (CTRL_NEURMEM_WE       ),  // input 写使能信号
-//    .addra (CTRL_NEURMEM_ADDR     ), 
-//    .dina  (neuron_data  ),
-//);
 
 endmodule

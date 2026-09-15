@@ -354,7 +354,7 @@ module ODIN_ffstdp #(
     ) neuron_core_inst (
         // Global inputs ------------------------------------------
     .CLK                                (CLK                       ),// 时钟信号
-    .RST_N                              (RST                       ),// 复位信号
+    .RST                                (RST                       ),// 复位信号（高有效）
 
         // Synaptic inputs ----------------------------------------
     .SYNARRAY_RDATA                     (SYNARRAY_RDATA            ),// 从突触数组读取的输入数据

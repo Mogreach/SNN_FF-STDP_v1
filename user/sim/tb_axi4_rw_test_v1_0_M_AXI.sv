@@ -8,7 +8,7 @@ module tb_axi4_rw_test_v1_0;
     parameter OUTPUT_NEURON = 256;
     // Smoke-test defaults: process two training samples only. Override these
     // parameters when a batch or full-dataset regression is actually needed.
-    parameter TOTAL_TRAIN_SIZE = 2;
+    parameter TOTAL_TRAIN_SIZE = 3;
     parameter TOTAL_TEST_SIZE = 0;
     parameter STOP_AFTER_FIRST_PROCESS_DONE = 1'b0;
     parameter VCD_FILE = "build_axi_test/tb_axi4_rw_test_v1_0_M_AXI.vcd";
@@ -200,6 +200,8 @@ integer i, block_index = 0;
 integer aer_event_count = 0;
 integer tstep_event_count = 0;
 integer completed_sample_count = 0;
+integer pre_ram_init_index;
+integer post_ram_init_index;
 
     initial begin
         $dumpfile(VCD_FILE);
@@ -263,6 +265,30 @@ integer completed_sample_count = 0;
     end
 
     always @(posedge SNN_CLK) begin
+        // Empty FIFO data is intentionally clamped to zero by scheduler.v.
+        // Once non-empty, every entry must have been written by a valid AER
+        // event before the controller may consume it.
+        if (m_axi_aresetn &&
+            !u_Top_test.u_ODIN_ffstdp.SCHED_EMPTY &&
+            $isunknown(u_Top_test.u_ODIN_ffstdp.SCHED_DATA_OUT)) begin
+            $fatal(1, "Unknown scheduler FIFO output: empty=%b read_ptr=%0d write_ptr=%0d data=%h at %0t",
+                u_Top_test.u_ODIN_ffstdp.SCHED_EMPTY,
+                u_Top_test.u_ODIN_ffstdp.scheduler_inst.fifo_spike_0.read_ptr,
+                u_Top_test.u_ODIN_ffstdp.scheduler_inst.fifo_spike_0.write_ptr,
+                u_Top_test.u_ODIN_ffstdp.SCHED_DATA_OUT, $time);
+        end
+        if (m_axi_aresetn &&
+            u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_PRE_NEUR_WE &&
+            ($isunknown(u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_PRE_NEURON_ADDRESS) ||
+             $isunknown(u_Top_test.u_ODIN_ffstdp.neuron_core_inst.pre_neuron_sram_in))) begin
+            $fatal(1, "Unknown pre-neuron write: ctrl_state=%b addr=%0d pre_q=%h pre_d=%h event=%b tref=%b at %0t",
+                u_Top_test.u_ODIN_ffstdp.controller_inst.state,
+                u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_PRE_NEURON_ADDRESS,
+                u_Top_test.u_ODIN_ffstdp.neuron_core_inst.pre_neuron_sram_out,
+                u_Top_test.u_ODIN_ffstdp.neuron_core_inst.pre_neuron_sram_in,
+                u_Top_test.u_ODIN_ffstdp.CTRL_NEUR_EVENT,
+                u_Top_test.u_ODIN_ffstdp.CTRL_TREF_EVENT, $time);
+        end
         if (m_axi_aresetn &&
             u_Top_test.u_ODIN_ffstdp.controller_inst.CTRL_POST_NEUR_WE &&
             $isunknown(u_Top_test.u_ODIN_ffstdp.neuron_core_inst.post_neuron_sram_in)) begin
@@ -323,21 +349,46 @@ integer completed_sample_count = 0;
         $display("Loaded %0d spike bytes from %s", bytes_read, SPIKE_DATA_FILE);
     end
 
-    // Override the behavioral SRAM models' random power-up contents with the
-    // same trained weights and clean neuron state used by the Vivado design.
-    // Delay one tick so this runs after the SRAM models' own initial blocks.
+    // Neuron RAM is self-written in both modes. The weight model exposes its
+    // internal SRAM array only in SNN_RAM_SIM; FPGA mode uses the IP COE file.
     initial begin
         #1;
+`ifdef SNN_RAM_SIM
         $readmemb(WEIGHT_DATA_FILE,
             u_Top_test.u_ODIN_ffstdp.u_synaptic_core.u_sram_synaptic.SRAM,
             0, DATA_SIZE * OUTPUT_NEURON / u_Top_test.POST_NEUR_PARALLEL - 1);
+`endif
         $readmemh(POST_NEURON_STATE_FILE,
             u_Top_test.u_ODIN_ffstdp.neuron_core_inst.neurarray_post.SRAM,
             0, OUTPUT_NEURON / u_Top_test.POST_NEUR_PARALLEL - 1);
         $readmemh(PRE_NEURON_STATE_FILE,
             u_Top_test.u_ODIN_ffstdp.neuron_core_inst.neurarray_pre.SRAM,
             0, DATA_SIZE - 1);
-        $display("Loaded SNN weights and neuron state files.");
+
+        // Check the storage arrays themselves.  Do not check Qr/Q here: both
+        // neuron RAMs have synchronous read ports, so Qr legitimately remains
+        // X until the first clock edge with CS asserted.
+        for (pre_ram_init_index = 0;
+             pre_ram_init_index < DATA_SIZE;
+             pre_ram_init_index = pre_ram_init_index + 1) begin
+            if ($isunknown(u_Top_test.u_ODIN_ffstdp.neuron_core_inst
+                           .neurarray_pre.SRAM[pre_ram_init_index]))
+                $fatal(1, "Pre-neuron RAM initialization failed: file=%s addr=%0d value=%h",
+                       PRE_NEURON_STATE_FILE, pre_ram_init_index,
+                       u_Top_test.u_ODIN_ffstdp.neuron_core_inst
+                       .neurarray_pre.SRAM[pre_ram_init_index]);
+        end
+        for (post_ram_init_index = 0;
+             post_ram_init_index < OUTPUT_NEURON / u_Top_test.POST_NEUR_PARALLEL;
+             post_ram_init_index = post_ram_init_index + 1) begin
+            if ($isunknown(u_Top_test.u_ODIN_ffstdp.neuron_core_inst
+                           .neurarray_post.SRAM[post_ram_init_index]))
+                $fatal(1, "Post-neuron RAM initialization failed: file=%s addr=%0d value=%h",
+                       POST_NEURON_STATE_FILE, post_ram_init_index,
+                       u_Top_test.u_ODIN_ffstdp.neuron_core_inst
+                       .neurarray_post.SRAM[post_ram_init_index]);
+        end
+        $display("Loaded neuron state files.");
     end
 
   
