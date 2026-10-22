@@ -1,6 +1,6 @@
 # FF-STDP 在线学习加速器：Zynq-7010 设计、验证与上板指南
 
-> 文档定位：本文件是本仓库的总学习文档和复现入口，以当前稳定代码和 Zynq-7010 上板流程为准。设计推导、截图和历史调试经验均保留；与当前实现不一致的旧方案仅作为背景，不覆盖源码和工程配置。
+> 文档定位：本文件是本仓库的总学习文档和复现入口，以当前稳定代码和 Zynq-7010 上板流程为准。设计推导、截图和历史调试经验均保留；
 > 论文：FF-STDP：一种基于前向-前向与STDP融合的低功耗在线学习SNN加速器-《电子学报》
 
 ## 1. 前言
@@ -21,19 +21,19 @@
 
 ### 1.2 当前归档状态
 
-| 项目        | 当前代码事实                                           | 主要依据                                      |
-| --------- | ------------------------------------------------ | ----------------------------------------- |
-| FPGA 器件   | Zynq-7010，`xc7z010clg400-1`         | `prj/snn_pl_axi_ddr/snn_pl_axi_ddr.xpr`   |
-| 工具版本      | Vivado 2020.2 工程                                 | 同上                                        |
-| 网络顶层      | 当前维护版为单层 784→256                                | `user/src/snn_ff/Top_test.v`              |
-| 时间步       | RTL 当前默认 `TIME_STEP=8`                           | `Top_test.v`、AXI RTL                      |
-| 后神经元并行度   | 当前顶层默认 8                                         | `Top_test.v`                              |
+| 项目        | 当前代码事实                                           | 主要依据                                     |
+| --------- | ------------------------------------------------ | ---------------------------------------- |
+| FPGA 器件   | Zynq-7010，`xc7z010clg400-1`                      | `prj/snn_pl_axi_ddr/snn_pl_axi_ddr.xpr`  |
+| 工具版本      | Vivado 2020.2 工程                                 | 同上                                       |
+| 网络顶层      | 当前维护版为单层 784→256                                 | `user/src/snn_ff/Top_test.v`             |
+| 时间步       | RTL 当前默认 `TIME_STEP=8`                           | `Top_test.v`、AXI RTL                     |
+| 后神经元并行度   | 当前顶层默认 8                                         | `Top_test.v`                             |
 | AXI 数据口   | PL 为 AXI4 master，经 SmartConnect 接 PS `S_AXI_HP0` | `user/script/system.tcl`、当前 Block Design |
-| PL/AXI 时钟 | 当前 BD 把 Top、AXI master、HP0 时钟都接到 FCLK0=100 MHz   | `system.tcl`                              |
-| SD 卡      | PS7 SD0，MIO 40..45，卡检测 MIO10；FatFs 读取文件          | `system.tcl`、Vitis `main.c`               |
-| 启动方式      | 两个低有效板上按键，经消抖和反相后驱动启动与训练开关                       | `system.tcl`、`key_debounce.v`             |
-| PS↔PL 控制  | 当前未启用 EMIO GPIO；PS 只负责装载 DDR 和读取结果               | `system.tcl` 中 EMIO/GPIO 均禁用              |
-| 结果写回      | 每个输入条目写一个 32-bit goodness                        | AXI master RTL                            |
+| PL/AXI 时钟 | 当前 BD 把 Top、AXI master、HP0 时钟都接到 FCLK0=100 MHz   | `system.tcl`                             |
+| SD 卡      | PS7 SD0，MIO 40..45，卡检测 MIO10；FatFs 读取文件          | `system.tcl`、Vitis `main.c`              |
+| 启动方式      | 两个低有效板上按键，经消抖和反相后驱动启动与训练开关                       | `system.tcl`、`key_debounce.v`            |
+| PS↔PL 控制  | 当前未启用 EMIO GPIO；PS 只负责装载 DDR 和读取结果               | `system.tcl` 中 EMIO/GPIO 均禁用             |
+| 结果写回      | 每个输入条目写一个 32-bit goodness                        | AXI master RTL                           |
 
 ### 1.3 上板前一致性检查
 
@@ -402,6 +402,25 @@ AER input
 - `neuron_core.v` 并行处理 8 个后神经元，连接后状态 SRAM 与 AER 输出。
 - `sram_post_neuron.v`、`sram_pre_neuron.v` 保存跨事件状态。
 
+#### 神经元状态 RAM 参数
+
+神经元状态不存放在突触权重 BRAM 中，而由 `neuron_core.v` 实例化两组参数化 RAM。突触前 RAM 以单个输入神经元为存储粒度；突触后 RAM 则以 `POST_NEUR_PARALLEL` 个 lane 为一个存储字，因此深度随并行度变化。当前顶层 `INPUT_NEURON=784`、`OUTPUT_NEURON=256`、`POST_NEUR_PARALLEL=8`，相应配置如下。
+
+| RAM | RTL 模块/实例 | 存储粒度 | 单个神经元状态位宽 | RAM 数据位宽 | 深度 | RAM 地址位宽 | 当前值 |
+| --- | --- | --- | ---: | ---: | ---: | ---: | --- |
+| 突触前状态 RAM | `sram_pre_neuron` / `neurarray_pre` | 1 个输入神经元 | `PRE_NEUR_DATA_WIDTH` | `PRE_NEUR_DATA_WIDTH` | `INPUT_NEURON` | `PRE_NEUR_ADDR_WIDTH` | 8 bit × 784，10 bit 地址 |
+| 突触后状态 RAM | `sram_post_neuron` / `neurarray_post` | `POST_NEUR_PARALLEL` 个后神经元 | `POST_NEUR_DATA_WIDTH` | `POST_NEUR_PARALLEL × POST_NEUR_DATA_WIDTH` | `OUTPUT_NEURON / POST_NEUR_PARALLEL` | `$clog2(OUTPUT_NEURON / POST_NEUR_PARALLEL)` | 160 bit × 32，5 bit 地址 |
+
+突触后 RAM 的外部神经元地址仍是 `POST_NEUR_ADDR_WIDTH=10` bit；`neuron_core` 依据 `POST_NEUR_BYTE_ADDR_WIDTH=$clog2(POST_NEUR_PARALLEL)=3` 取其组地址部分，从而使连续的 8 个后神经元共享一个 160-bit 存储字。一般化地：
+
+```text
+post_ram_data_width = POST_NEUR_PARALLEL × POST_NEUR_DATA_WIDTH
+post_ram_depth      = OUTPUT_NEURON / POST_NEUR_PARALLEL
+post_ram_addr_width = clog2(post_ram_depth)
+```
+
+当改变输出神经元数量、并行度或状态字段位宽时，除 RTL 参数外，还必须同步更新 `hardware_sim/hardware_sim_config.py`、`gen_neuron_state.py` 生成的状态文件，以及 testbench 的 `$readmemh` 装载范围。
+
 #### 突触后神经元状态定义
 
 | Bitwise location in word | Parameter/state | Name         | Width | Description |
@@ -453,7 +472,29 @@ Python 中梯度的核心形式为正负 sigmoid 导数乘以发放频率及学�
 ![Pasted_20260916001017_FF-STDP加速器设计（ZYNQ）](assets/FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89/Pasted_20260916001017_FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89.png)
 
 ### 6.9 AER输出模块
+`aer_out/aer_outs.v` 将 8 路后神经元发放结果转换回 12-bit AER 事件，并在一个时间步的所有输出事件发送完毕后产生下游时间步事件。模块内部使用 `syncFIFO_diffWidth`：写端一次写入 8 个 lane 的 AER 字，读端每次取出 1 个 12-bit 事件，因此同一组并行神经元的输出会被串行发送。
+
+每个 lane 的输入事件按下式编码。未发放的 lane 不占用有效 AER 传输，写入 FIFO 的是无效码 `2'b11`；读端检测到无效码后不拉起请求。
+
+```text
+spike lane i : {2'b00, CTRL_POST_NEURON_ADDRESS + i}
+silent lane  : {2'b11, 10'd0}
+time step    : {2'b01, 10'd0}
+```
+
 #### 状态机设计
+
+该模块没有单独定义枚举型 `state` 寄存器，而是由 `aer_out_trans`、`AEROUT_REQ`、同步后的 `AEROUT_ACK`、FIFO 空标志和 `aer_out_addr_last` 共同形成输出状态机。其等价状态与转移如下。
+
+| 阶段 | 进入条件 | 主要动作 | 退出条件 |
+| --- | --- | --- | --- |
+| 并行结果入 FIFO | `CTRL_AEROUT_PUSH_NEUR=1` 且 FIFO 未满 | 将当前 8 lane 编码为 8 个 AER 字并写入异宽 FIFO | 写入完成，等待控制器进入输出阶段 |
+| 取下一个神经元事件 | `CTRL_AEROUT_POP_NEUR=1`、FIFO 非空、没有进行中的传输且 ACK 为低 | `fifo_rd_en` 读出一个 12-bit 字；经过一级寄存后，只有事件类型非 `11` 的字才允许发送 | 得到有效神经元事件或跳过无效 lane |
+| 发起 AER 请求 | `aer_out_start=1` 且同步 ACK 为低 | 锁存 `AEROUT_ADDR`，拉高 `AEROUT_REQ`，置 `aer_out_trans` | 接收端将 `AEROUT_ACK` 拉高 |
+| 等待握手释放 | ACK 高 | 拉低 `AEROUT_REQ`，保持传输占用，防止重复取 FIFO | 检测到同步 ACK 的下降沿，清除 `aer_out_trans` |
+| 发送时间步事件 | `CTRL_AEROUT_POP_TSTEP=1`、FIFO 已空、无进行中传输且尚未完成 | 发送 `{2'b01,10'd0}`，并置 `aer_out_addr_last` 标记该时间步最后一个事件 | 该事件的 ACK 完成后，`aer_out_addr_last` 下降沿形成 `AEROUT_CTRL_FINISH` |
+
+`AEROUT_ACK` 经过两级同步和一个延迟寄存器后参与状态转移，避免把异步应答直接用于 FIFO 读使能或请求撤销。`AEROUT_CTRL_FINISH` 反馈给 `controller`：只有本时间步所有神经元事件和末尾时间步事件都完成握手后，控制器才允许继续处理下一阶段。`ONE_SAMPLE_FINISH` 由 `CTRL_AEROUT_TREF_FINISH` 的延迟链产生，用于将核心的一个样本完成时刻导出到 `Top_test.PROCESS_DONE`。
 
 ![Pasted_20260916003335_FF-STDP加速器设计（ZYNQ）](assets/FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89/Pasted_20260916003335_FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89.png)
 
@@ -508,7 +549,7 @@ result_bytes      = (train_entries + test_entries) × 4
 
 ### 8.1 环境
 
-脚本依赖仓库外部 `SNN-forwardforward` 软件工程。建议建立 Python 虚拟环境，并安装该工程实际需要的版本：PyTorch、torchvision、NumPy、Brian2、Matplotlib、Seaborn。然后：
+Python 数据生成环境使用 PyTorch、torchvision、NumPy、Matplotlib、Seaborn 等依赖；运行前激活项目已验证的虚拟环境，然后执行：
 
 1. 把脚本里的 Windows `sys.path.append('D:/OneDrive/...')` 改成当前软件模型路径，或通过 `PYTHONPATH` 提供。
 2. 修改 `hardware_sim/hardware_sim_config.py`：任务名、模型权重、层规模、时间步、并行度、位宽、阈值。
@@ -534,7 +575,7 @@ python hardware_sim/gen_sigmoid.py
 - 对有符号最小值、0、最大值逐一验证补码和 RTL 解包。
 - `test_labels.h` 的标签数量应等于原始测试图像数，而不是候选条目数。
 
-## 9. RTL 仿真
+## 9. RTL 仿真流程
 
 ### 9.1 子模块-核心-系统验证
 
@@ -558,7 +599,7 @@ cd user/sim/iverilog
 
 Icarus 环境用 `axi_input_fifo_model.sv` 行为模型替代 Vivado 的 `axi_input_fifo` IP。若在 xsim 中跑系统级 testbench，应改用工程生成的行为模型，否则只能完成 RTL 展开检查。
 
-两个 filelist 顶部都定义了 `SNN_RAM_SIM`，把突触权重存储切到行为模型。**FPGA 构建不定义该宏**，此时 `synaptic_core.v` 实例化工程里的 `sram_synaptic` BRAM IP，且神经元状态改由 SRAM 模块内可综合的 `initial $readmemh` 初始化，路径必须在综合时通过 `SNN_PRE_NEUR_STATE_FILE`/`SNN_POST_NEUR_STATE_FILE` 传入（不传则综合报错）。完整说明见 `user/src/snn_ff/sram/README.md`。
+两个 filelist 顶部都定义了 `SNN_RAM_SIM`，把突触权重存储切到行为模型。**FPGA 构建不定义该宏**，此时 `synaptic_core.v` 实例化工程里的 `sram_synaptic` BRAM IP。前、后神经元状态 RAM 在 RTL 中使用参数化自写 RAM；仿真初值由 testbench 按 DUT 层次通过 `$readmemh` 装载。完整说明见 `user/src/snn_ff/sram/README.md`。
 
 ### 9.3 Vivado/xsim 系统 testbench 数据路径
 
@@ -714,7 +755,7 @@ SD 加载完成不自动启动 PL；用户仍需按 `key_train_enable` 选择是
 **分析**：对比仿真结果确认功能无误后，推断是PROCESS_DONE信号一直没给出导致状态机卡住，而决定PROCESS_DONE信号的**先决条件是SNN模块接受1个样本的16个时间步数据后才会拉高，对于AXI读数据以及输入事件生成均确认无误后，发现SNN模块一直没有事件输出，于是检查该模块的所有接口、时序逻辑是否无误，最后发现输入的事件一直没有打入SNN的调度器中，检查相关信号**，确认了是复位信号异常，检查Block Design发现是该模块的复位信号接反了！！！
 ### 13.2 DDR大小端读写映射
 
-  在检查DDR读写数据时候，对比观察Memory Monitor和IPA抓取的信号，发现AXI从DDR读出的数据与存储的格式不一致。具体而言就是我导入DDR的数据是以**大端**方式存储的，即最开始的数据从**最高位开始**，然而AXI总线（32位）是按照字节为单位，**从低位开始映射**的即**小端读写**，如下图所示，并且输入需要经过FIFO缓存，FIFO读出是从**高位开始**的，因此需要对**AXI数据重新排列**才可以确保数据流的正确输入。
+  DDR 读写调试中，通过对比 Memory Monitor 与 ILA 抓取信号可发现：若导入 DDR 的字节序与 AXI 读取顺序不一致，输入事件会错位。当前数据以字节为单位按既定顺序写入 DDR，而 32-bit AXI 读写按低字节映射；后续 FIFO 又从高位依次取出数据，因此 AXI 读数据需要按字节重排，才能保证事件流顺序正确。
   ![Pasted_20260916003928_FF-STDP加速器设计（ZYNQ）](assets/FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89/Pasted_20260916003928_FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89.png)
 修改代码如下：
 
@@ -761,11 +802,11 @@ ZYNQ的DDR并非所有空间都可以使用！！！
 
 1. 膜电位累加增加一级寄存器，打一拍写入
 
-![](https://my.feishu.cn/space/api/box/stream/download/asynccode/?code=NDIxMDhhYzlkZGQ5NjcyNWUwMTExZDc5MjUwZTZhYjVfTUNpWU5NOHJNZkNhYXlWcTJ6RktxRGs3NENUVnhrRE9fVG9rZW46VjVDUGJlc0pRb3d0aHp4UUlySGNkeHNxbnhlXzE3ODk0OTA2NDE6MTc4OTQ5NDI0MV9WNA&add_watermark=true&scene_type=CCM)
+![Pasted_20260917114337_FF-STDP加速器设计（ZYNQ）](assets/FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89/Pasted_20260917114337_FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89.png)
 
 2. 改变spike_out写法
 
-![](https://my.feishu.cn/space/api/box/stream/download/asynccode/?code=OGQ4MmQ3YjVmNDBhNTg2MGViMDhhMjBiZGQ3NzQ3ZmVfWkxxMmQ0cmJZVEhBY0JyTUQ1Y3pabXU0REJWdHlzdlFfVG9rZW46V05VZmJ6bHBzb2VWNVd4M0FlM2NCOUtqbmlmXzE3ODk0OTA2NDE6MTc4OTQ5NDI0MV9WNA&add_watermark=true&scene_type=CCM)
+![Pasted_20260917114405_FF-STDP加速器设计（ZYNQ）](assets/FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89/Pasted_20260917114405_FF-STDP%E5%8A%A0%E9%80%9F%E5%99%A8%E8%AE%BE%E8%AE%A1%EF%BC%88ZYNQ%EF%BC%89.png)
 
 此处原来spike_out写在always外面，其赋值是有条件的，但这样写，state_core_next_i >= param_thr其路径会经过条件外的路径，造成不必要的延时；现直接结合到always块内的选择电路，只在time_step_event时才比较输出。
 ## 14. 维护规则
@@ -780,7 +821,7 @@ ZYNQ的DDR并非所有空间都可以使用！！！
 - DDR 地址图更新；
 - 本文及相关目录 README 更新。
 
-图片统一保存在 `assets/FF-STDP加速器设计（ZYNQ）/`，Markdown 使用仓库相对路径。不要再创建“图片和附件”目录。唯一例外是 Vivado 系统 TB 的 `SPIKE_DATA_FILE`：它是运行环境配置，必须按本机修改，不能复制为文档图片链接。
+图片统一保存在 `assets/FF-STDP加速器设计（ZYNQ）/`，Markdown 使用仓库相对路径。Vivado 系统 TB 的 `SPIKE_DATA_FILE` 属于运行环境配置，需按本机路径设置，不属于文档图片资源。
 
 ## 附录 A：关键文件速查
 
