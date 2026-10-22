@@ -1,0 +1,15 @@
+SNN FF-STDP Accelerator (Zynq-7010)
+Copyright 2026 Mogreach
+
+This product includes RTL derived from tinyODIN, a low-cost digital
+spiking neuromorphic processor adapted from ODIN:
+
+  user/src/snn_ff/controller.v
+  user/src/snn_ff/fifo/fifo.v
+  user/src/snn_ff/aer_out/aer_outs.v
+
+Copyright (C) 2019-2022, Université catholique de Louvain (UCLouvain, Belgium), University of Zürich (UZH, Switzerland),
+Katholieke Universiteit Leuven (KU Leuven, Belgium), and Delft University of Technology (TU Delft, Netherlands).
+
+Those files are licensed under the Apache License, Version 2.0, with the
+Solderpad Hardware License v 2.1 (SPDX: Apache-2.0 WITH SHL-2.1).
