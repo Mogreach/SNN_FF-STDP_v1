@@ -100,7 +100,6 @@ hardware_sim/data/
 RemoteSystemsTempFiles/
 Packages/
 Debug/
-Release/
 _ide/
 /prj/snn_pl_axi_ddr/vitis/system_wrapper/
 /prj/snn_pl_axi_ddr/vitis/snn_test_system/
@@ -118,3 +117,6 @@ _ide/
 *~
 .DS_Store
 Thumbs.db
+
+# thesis materials
+/thesis
