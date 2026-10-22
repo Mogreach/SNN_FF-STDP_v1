@@ -1,0 +1,396 @@
+from __future__ import annotations
+
+import random
+from typing import Callable, Tuple
+
+import torch
+import torch.nn.functional as F
+
+
+NEG_SAMPLE_AUTO = "auto"
+NEG_SAMPLE_EMBED_LABEL_ONEHOT = "embed_label_onehot"
+NEG_SAMPLE_EMBED_ZERO_ONEHOT = "embed_zero_onehot"
+NEG_SAMPLE_SCFF = "SCFF"
+NEG_SAMPLE_GLOBAL_FOURIER_LABEL = "global_fourier_label"
+
+NegativeSamplingFn = Callable[[torch.Tensor, torch.Tensor, int], Tuple[torch.Tensor, torch.Tensor]]
+
+_NEGATIVE_SAMPLING_REGISTRY: dict[str, NegativeSamplingFn] = {}
+
+
+def register_negative_sampling_strategy(name: str, fn: NegativeSamplingFn) -> None:
+    _NEGATIVE_SAMPLING_REGISTRY[name] = fn
+
+
+def list_negative_sampling_strategies() -> tuple[str, ...]:
+    return tuple(sorted(_NEGATIVE_SAMPLING_REGISTRY))
+
+
+def resolve_negative_sampling_strategy_name(strategy_name: str | None, mode_config) -> str:
+    if strategy_name in (None, "", NEG_SAMPLE_AUTO):
+        return (
+            NEG_SAMPLE_SCFF
+            if mode_config.is_supervised
+            else NEG_SAMPLE_EMBED_LABEL_ONEHOT
+        )
+    if strategy_name not in _NEGATIVE_SAMPLING_REGISTRY:
+        raise ValueError(
+            "Unknown negative sampling strategy="
+            f"{strategy_name!r}. Registered: {sorted(_NEGATIVE_SAMPLING_REGISTRY)}"
+        )
+    return strategy_name
+
+
+def stdnorm(x, dims=(1, 2, 3)):
+    x = x - torch.mean(x, dim=dims, keepdim=True)
+    x = x / (1e-10 + torch.std(x, dim=dims, keepdim=True))
+    return x
+
+
+def minmax_norm(x, dims=(1, 2, 3), eps=1e-10):
+    x_min = torch.amin(x, dim=dims, keepdim=True)
+    x_max = torch.amax(x, dim=dims, keepdim=True)
+    x = (x - x_min) / (x_max - x_min + eps)
+    return x
+
+
+def _spatial_norm_dims(x: torch.Tensor) -> tuple[int, ...]:
+    # SCFF-style image mixing should normalize over the spatial dimensions only.
+    if x.ndim >= 3:
+        return tuple(range(x.ndim - 2, x.ndim))
+    return tuple(range(1, x.ndim))
+
+
+def _select_label_reference_images(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    label_reference_bank: torch.Tensor,
+) -> torch.Tensor:
+    if label_reference_bank.ndim != x.ndim:
+        raise ValueError(
+            "label_reference_bank must have shape [num_classes, ...sample_shape] "
+            f"matching the input sample rank. Got bank.ndim={label_reference_bank.ndim}, "
+            f"x.ndim={x.ndim}."
+        )
+
+    label_indices = y.to(device=x.device, dtype=torch.long)
+    if label_indices.numel() == 0:
+        return torch.empty_like(x)
+    if int(label_indices.max().item()) >= int(label_reference_bank.shape[0]):
+        raise ValueError(
+            "label_reference_bank does not cover all requested labels. "
+            f"bank classes={label_reference_bank.shape[0]}, "
+            f"requested max label={int(label_indices.max().item())}."
+        )
+
+    reference_bank = label_reference_bank.to(device=x.device, dtype=x.dtype)
+    return reference_bank.index_select(0, label_indices)
+
+
+def _mix_with_label_reference_images(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    label_reference_bank: torch.Tensor,
+) -> torch.Tensor:
+    reference_images = _select_label_reference_images(x, y, label_reference_bank)
+    return minmax_norm(x + reference_images, dims=_spatial_norm_dims(x))
+
+
+def generate_pos_n_neg_sample(
+    x,
+    y,
+    num_classes=10,
+    type="SCFF",
+    *,
+    strategy_name: str | None = None,
+    mode_config=None,
+    sampling_context: dict | None = None,
+):
+    """
+    Backward-compatible wrapper around the new negative-sampling registry.
+
+    Legacy callers can keep passing `type=...`; new code should prefer
+    `strategy_name=...` plus `mode_config` so one experiment setting flows
+    through the whole project consistently. `sampling_context` is reserved for
+    prediction-time helpers such as label-conditioned SCFF reference images.
+    """
+    if strategy_name is None:
+        strategy_name = type
+    if mode_config is not None:
+        strategy_name = resolve_negative_sampling_strategy_name(
+            strategy_name,
+            mode_config,
+        )
+    if strategy_name not in _NEGATIVE_SAMPLING_REGISTRY:
+        raise ValueError(
+            "Unknown negative sampling strategy="
+            f"{strategy_name!r}. Registered: {sorted(_NEGATIVE_SAMPLING_REGISTRY)}"
+        )
+    sampler_fn = _NEGATIVE_SAMPLING_REGISTRY[strategy_name]
+    if sampling_context is None:
+        return sampler_fn(x, y, num_classes)
+    return sampler_fn(
+        x,
+        y,
+        num_classes,
+        sampling_context=sampling_context,
+    )
+
+
+def get_y_neg(y, num_classes, device):
+    y_neg = y.clone()
+    for idx, y_samp in enumerate(y):
+        allowed_indices = list(range(num_classes))
+        allowed_indices.remove(y_samp.item())
+        y_neg[idx] = torch.tensor(allowed_indices)[
+            torch.randint(len(allowed_indices), size=(1,))
+        ].item()
+    return y_neg.to(device)
+
+
+def overlay_y_on_x(x, y, classes=10):
+    x_ = x.clone()
+    batch_size = x.shape[0]
+    x_[:, :, 0, :classes] *= 0.0
+    max_value = x_.max()
+    for i in range(batch_size):
+        x_[i, :, 0, y[i].item()] = max_value
+    return x_
+
+
+def overlay_label_on_x(x, classes=10):
+    x_ = x.clone()
+    x_[:, :, 0, :classes] *= 0.0
+    x_[:, :, 0, :classes] += 1
+    return x_
+
+
+def overlay_zero_on_x(x, y, classes=10):
+    x_ = x.clone()
+    batch_size = x.shape[0]
+    x_[:, :, 0, :classes] *= 0.0
+    x_[:, :, 0, :classes] += 1.0
+    for i in range(batch_size):
+        x_[i, :, 0, y[i].item()] = 0
+    return x_
+
+
+def _build_label_fourier_pattern(
+    y: torch.Tensor,
+    *,
+    image_shape: torch.Size,
+    num_classes: int,
+) -> torch.Tensor:
+    batch_size, channels, height, width = image_shape
+    device = y.device
+    dtype = torch.float32
+
+    yy, xx = torch.meshgrid(
+        torch.linspace(0.0, 1.0, height, device=device, dtype=dtype),
+        torch.linspace(0.0, 1.0, width, device=device, dtype=dtype),
+        indexing="ij",
+    )
+    xx = xx.view(1, 1, height, width)
+    yy = yy.view(1, 1, height, width)
+
+    labels = y.to(device=device, dtype=dtype).view(batch_size, 1, 1, 1)
+    freq_x = 1.0 + torch.remainder(labels, 4.0)
+    freq_y = 1.0 + torch.remainder(torch.floor(labels / 4.0), 4.0)
+    radial_freq = 1.0 + torch.remainder(labels, 3.0)
+    phase = (2.0 * torch.pi * labels) / max(float(num_classes), 1.0)
+
+    base_pattern = (
+        torch.sin(2.0 * torch.pi * (freq_x * xx + freq_y * yy) + phase)
+        + 0.5 * torch.cos(2.0 * torch.pi * radial_freq * (xx - yy) - phase)
+    )
+    base_pattern = base_pattern.expand(-1, channels, -1, -1)
+    return minmax_norm(base_pattern, dims=(2, 3))
+
+
+def _blend_global_label_pattern(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    *,
+    num_classes: int,
+    strength: float = 0.35,
+) -> torch.Tensor:
+    pattern = _build_label_fourier_pattern(
+        y,
+        image_shape=x.shape,
+        num_classes=num_classes,
+    ).to(dtype=x.dtype)
+    blended = (1.0 - strength) * x + strength * pattern
+    return minmax_norm(blended, dims=(2, 3))
+
+
+def generate_global_fourier_label_pos_n_neg_sample(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    num_classes: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Build Fourier-label positive/negative samples with the same contract as the
+    other FF negative-sampling helpers.
+
+    Positive samples are overlaid with the Fourier code of the ground-truth
+    label. Negative samples are overlaid with the Fourier code of a sampled
+    wrong label from a different class.
+    """
+    pos_labels = y
+    neg_labels = get_y_neg(y, num_classes, x.device)
+
+    x_pos = _blend_global_label_pattern(
+        x,
+        pos_labels,
+        num_classes=num_classes,
+    )
+    x_neg = _blend_global_label_pattern(
+        x,
+        neg_labels,
+        num_classes=num_classes,
+    )
+    return x_pos, x_neg
+
+
+def _embed_label_onehot_sampler(x, y, num_classes):
+    x_pos = overlay_y_on_x(x, y, classes=num_classes)
+    y_neg = get_y_neg(y, num_classes, x.device)
+    x_neg = overlay_y_on_x(x, y_neg, classes=num_classes)
+    return x_pos, x_neg
+
+
+def _embed_zero_onehot_sampler(x, y, num_classes):
+    x_pos = overlay_label_on_x(x, classes=num_classes)
+    x_neg = overlay_zero_on_x(x, y, classes=num_classes)
+    return x_pos, x_neg
+
+
+def _scff_sampler(x, y, num_classes, *, sampling_context=None):
+    label_reference_bank = None
+    if sampling_context is not None:
+        label_reference_bank = sampling_context.get("label_reference_bank")
+
+    if label_reference_bank is not None:
+        # Prediction-time SCFF can inject the hypothesis label directly by
+        # mixing the input with a reference image from that class.
+        x_pos = _mix_with_label_reference_images(x, y, label_reference_bank)
+        neg_labels = get_y_neg(y, num_classes, x.device)
+        x_neg = _mix_with_label_reference_images(x, neg_labels, label_reference_bank)
+        return x_pos, x_neg
+
+    del y, num_classes
+    p = 1
+    batch_size = x.shape[0]
+    if batch_size <= 1:
+        x_pos = minmax_norm(x + x, dims=_spatial_norm_dims(x))
+        return x_pos, x_pos.clone()
+    x_pos = x + x
+    random_indices = (torch.randperm(batch_size - 1, device=x.device) + 1)[
+        : min(p, batch_size - 1)
+    ]
+    labels = torch.arange(batch_size, device=x.device)
+    batch_negs = []
+    for i in random_indices:
+        x_neg = x[(labels + i) % batch_size]
+        batch_negs.append(x + x_neg)
+    x_neg = torch.cat(batch_negs, dim=0)
+    norm_dims = _spatial_norm_dims(x)
+    x_pos = minmax_norm(x_pos, dims=norm_dims)
+    x_neg = minmax_norm(x_neg, dims=norm_dims)
+    return x_pos, x_neg
+
+
+def _global_fourier_label_sampler(x, y, num_classes):
+    return generate_global_fourier_label_pos_n_neg_sample(
+        x,
+        y,
+        num_classes,
+    )
+
+
+def generate_continuous_mask(shape, block_scale=8, smooth=True, device="cpu"):
+    B, C, H, W = shape
+    low_H, low_W = H // block_scale, W // block_scale
+    noise = torch.rand((B, C, low_H, low_W), device=device)
+    mask = F.interpolate(noise, size=(H, W), mode="bilinear", align_corners=False)
+    if smooth:
+        kernel = torch.ones((1, 1, 5, 5), device=device) / 25.0
+        mask = F.conv2d(mask, kernel, padding=2)
+    threshold = random.uniform(0.4, 0.6)
+    return (mask > threshold).float()
+
+
+def generate_negative_samples_continuous(
+    x,
+    y,
+    dataset,
+    num_classes=10,
+    device="cpu",
+    visualize=False,
+    block_scale=3,
+    smooth=False,
+):
+    B = x.size(0)
+    H, W = x.size(2), x.size(3)
+    targets = torch.tensor(dataset.targets, device=device)
+    data_cpu = dataset.data.float() / 255.0
+
+    offsets = torch.randint(1, num_classes, (B,), device=device)
+    neg_labels = (y.to(device) + offsets) % num_classes
+    neg_indices = torch.empty(B, dtype=torch.long, device=device)
+
+    for lbl in range(num_classes):
+        pos_mask = neg_labels == lbl
+        cnt = int(pos_mask.sum().item())
+        if cnt == 0:
+            continue
+        class_indices_cpu = (dataset.targets == lbl).nonzero(as_tuple=True)[0]
+        if len(class_indices_cpu) == 0:
+            raise RuntimeError(f"No samples for class {lbl} in dataset.")
+        sel = torch.randint(0, len(class_indices_cpu), (cnt,), device=device)
+        chosen_cpu = class_indices_cpu[sel.cpu()].long()
+        neg_indices[pos_mask] = chosen_cpu.to(device)
+
+    neg_img = data_cpu[neg_indices.cpu()].unsqueeze(1).to(device)
+    mask = generate_continuous_mask(
+        (B, 1, H, W),
+        block_scale=block_scale,
+        smooth=smooth,
+        device=device,
+    )
+    neg_samples = x.to(device) * mask + neg_img * (1.0 - mask)
+
+    if visualize:
+        import matplotlib.pyplot as plt
+
+        n_vis = min(3, B)
+        for i in range(n_vis):
+            fig, axs = plt.subplots(1, 4, figsize=(8, 2))
+            axs[0].imshow(x[i].cpu().squeeze(), cmap="gray")
+            axs[0].set_title(f"Positive ({int(y[i].item())})")
+            axs[1].imshow(neg_img[i].cpu().squeeze(), cmap="gray")
+            axs[1].set_title(f"NegClass ({int(neg_labels[i].item())})")
+            axs[2].imshow(mask[i].cpu().squeeze(), cmap="gray")
+            axs[2].set_title("Mask")
+            axs[3].imshow(neg_samples[i].cpu().squeeze(), cmap="gray")
+            axs[3].set_title("Mixed (Negative)")
+            for ax in axs:
+                ax.axis("off")
+            plt.show()
+
+    return neg_samples
+
+
+register_negative_sampling_strategy(
+    NEG_SAMPLE_EMBED_LABEL_ONEHOT,
+    _embed_label_onehot_sampler,
+)
+register_negative_sampling_strategy(
+    NEG_SAMPLE_EMBED_ZERO_ONEHOT,
+    _embed_zero_onehot_sampler,
+)
+register_negative_sampling_strategy(NEG_SAMPLE_SCFF, _scff_sampler)
+register_negative_sampling_strategy(
+    NEG_SAMPLE_GLOBAL_FOURIER_LABEL,
+    _global_fourier_label_sampler,
+)

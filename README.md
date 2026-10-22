@@ -9,6 +9,7 @@
 | 路径                    | 作用                                           |
 |-----------------------|----------------------------------------------|
 | `hardware_sim/`       | Python 软件模型、量化、脉冲/权重/状态/ROM 生成               |
+| [`software_mlp/`](software_mlp/README.md) | MLP FF-STDP 监督/无监督训练、策略选择与多数据集评估 |
 | `Gen_out/`            | 当前任务的 `all_spikes.bin`、权重 COE、神经元状态与标签       |
 | `user/src/`           | 当前 RTL 唯一维护源；核心顶层为 `snn_ff/Top_test.v`       |
 | `user/sim/`           | Vivado 与 Icarus 验证 testbench                 |
