@@ -54,7 +54,6 @@ transcript
 test_labels.h
 hardware_sim/data/
 # Local documentation attachments/screenshots
-/assets/
 /prj/
 # Synthesis, implementation and power-analysis products
 *.bit
